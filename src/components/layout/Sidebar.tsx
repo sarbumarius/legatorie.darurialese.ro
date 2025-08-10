@@ -132,21 +132,21 @@ export const Sidebar = ({ comenzi, selectedProductId, setSelectedProductId }: Si
             ))}
           </div>
 
-          {selectedProductId && filteredOrders.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-md font-semibold mb-3">Comenzi cu acest produs ({filteredOrders.length})</h3>
-              <div className="space-y-2">
-                {filteredOrders.map((comanda) => (
-                  <Card key={comanda.id_comanda} className="p-2 text-xs">
-                    <p className="font-medium">Comanda: {comanda.id_comanda}</p>
-                    {comanda.data_comanda && (
-                      <p className="text-muted-foreground">Data: {comanda.data_comanda}</p>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
+          {/*{selectedProductId && filteredOrders.length > 0 && (*/}
+          {/*  <div className="mt-6">*/}
+          {/*    <h3 className="text-md font-semibold mb-3">Comenzi cu acest produs ({filteredOrders.length})</h3>*/}
+          {/*    <div className="space-y-2">*/}
+          {/*      {filteredOrders.map((comanda) => (*/}
+          {/*        <Card key={comanda.id_comanda} className="p-2 text-xs">*/}
+          {/*          <p className="font-medium">Comanda: {comanda.id_comanda}</p>*/}
+          {/*          {comanda.data_comanda && (*/}
+          {/*            <p className="text-muted-foreground">Data: {comanda.data_comanda}</p>*/}
+          {/*          )}*/}
+          {/*        </Card>*/}
+          {/*      ))}*/}
+          {/*    </div>*/}
+          {/*  </div>*/}
+          {/*)}*/}
         </>
       )}
     </aside>

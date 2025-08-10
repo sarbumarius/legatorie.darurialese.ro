@@ -1,7 +1,7 @@
 // src/api/orders.ts
 import { OrderApiResponse } from "@/types/OrderApi";
 
-const API_URL = "https://crm.actium.ro/api/comenzi-daruri-alese/productie";
+const API_URL = "https://crm.actium.ro/api/comenzi-daruri-alese-legatorie/productie";
 
 export async function fetchOrders(): Promise<OrderApiResponse[]> {
     const token = localStorage.getItem("authToken");

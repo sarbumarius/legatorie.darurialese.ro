@@ -9,32 +9,34 @@ import { Button } from "@/components/ui/button";
 import { DashboardProps, StatItem, PontajData, Comanda, WorkHistoryItem } from "@/types/dashboard";
 
 const API_BASE = 'https://crm.actium.ro';
-const EXTERNAL_API_URL = `${API_BASE}/api/statusurigravare`;
+const EXTERNAL_API_URL = `${API_BASE}/api/statusurilegatorie`;
 const PONTAJ_API_URL   = `${API_BASE}/api/azi-nou-angajat`;
-const COMENZI_API_URL  = `${API_BASE}/api/comenzi-daruri-alese-gravare`;
+const COMENZI_API_URL  = `${API_BASE}/api/comenzi-daruri-alese-legatorie`;
 const TIMER_START_API_URL = `${API_BASE}/api/action-timer-start-new`;
 const TIMER_STOP_API_URL = `${API_BASE}/api/action-timer-stop-new`;
 const WORK_HISTORY_API_URL = `${API_BASE}/api/zile-muncite-luna-curenta-nou`;
 
 const initialStatsData: StatItem[] = [
-    { title: "Gravare", value: 0, icon: Package, color: "bg-purple-500", group: 'right' },
+
+    { title: "Legatorie", value: 0, icon: Package, color: "bg-indigo-500", group: 'right' },
+
 
 
     { title: "FAN", value: 0, icon: Package, color: "bg-blue-500", group: 'left' },
     { title: "DPD", value: 0, icon: Package, color: "bg-red-500", group: 'left' },
 
+    { title: "Gravare", value: 0, icon: Package, color: "bg-purple-500", group: 'right' },
     { title: "Productie", value: 0, icon: Package, color: "bg-green-500", group: 'left' },
-    { title: "Legatorie", value: 0, icon: Package, color: "bg-indigo-500", group: 'right' },
 
-    { title: "Aprobare client", value: 0, icon: Timer, color: "bg-orange-500", group: 'right' },
-    { title: "Procesare", value: 0, icon: null, color: "bg-blue-500", group: 'right' },
-    { title: "In asteptare", value: 0, icon: null, color: "bg-yellow-500", group: 'right' },
-    { title: "Plata in asteptare", value: 0, icon: null, color: "bg-red-500", group: 'right' }
+    // { title: "Aprobare client", value: 0, icon: Timer, color: "bg-orange-500", group: 'right' },
+    // { title: "Procesare", value: 0, icon: null, color: "bg-blue-500", group: 'right' },
+    // { title: "In asteptare", value: 0, icon: null, color: "bg-yellow-500", group: 'right' },
+    // { title: "Plata in asteptare", value: 0, icon: null, color: "bg-red-500", group: 'right' }
 ];
 
 export const Dashboard = ({ user, onLogout }: DashboardProps) => {
     const [zonaActiva, setZonaActiva] = useState(() =>
-        localStorage.getItem('zonaActiva') || 'gravare'
+        localStorage.getItem('zonaActiva') || 'legatorie'
     );
     const [statsData, setStatsData] = useState<StatItem[]>(initialStatsData);
     const [isLoading, setIsLoading] = useState(false);
@@ -160,15 +162,20 @@ export const Dashboard = ({ user, onLogout }: DashboardProps) => {
             const data = await getStatusuri(zona);
             const newStatsData = [...initialStatsData];
             if (data.statusuri) {
-                newStatsData.find(stat => stat.title === "Productie")!.value = data.statusuri.debitare?.total || 0;
-                newStatsData.find(stat => stat.title === "FAN")!.value = data.statusuri.fan?.total || 0;
-                newStatsData.find(stat => stat.title === "DPD")!.value = data.statusuri.dpd?.total || 0;
-                newStatsData.find(stat => stat.title === "Aprobare client")!.value = data.statusuri.aprobareclient?.total || 0;
-                newStatsData.find(stat => stat.title === "Procesare")!.value = data.statusuri.procesare?.total || 0;
-                newStatsData.find(stat => stat.title === "In asteptare")!.value = data.statusuri.onhold?.total || 0;
-                newStatsData.find(stat => stat.title === "Plata in asteptare")!.value = data.statusuri.pending?.total || 0;
-                newStatsData.find(stat => stat.title === "Gravare")!.value = data.statusuri.gravare?.total || 0;
-                newStatsData.find(stat => stat.title === "Legatorie")!.value = data.statusuri.legatorie?.total || 0;
+                const mapVal = (title: string, val: number | undefined) => {
+                    const item = newStatsData.find(stat => stat.title === title);
+                    if (item) item.value = val ?? 0;
+                };
+                mapVal("Productie", data.statusuri.debitare?.total);
+                mapVal("FAN", data.statusuri.fan?.total);
+                mapVal("DPD", data.statusuri.dpd?.total);
+                mapVal("Gravare", data.statusuri.gravare?.total);
+                mapVal("Legatorie", data.statusuri.legatorie?.total);
+                // The following titles are currently not present in initialStatsData; keep guarded for future use
+                mapVal("Aprobare client", data.statusuri.aprobareclient?.total);
+                mapVal("Procesare", data.statusuri.procesare?.total);
+                mapVal("In asteptare", data.statusuri.onhold?.total);
+                mapVal("Plata in asteptare", data.statusuri.pending?.total);
             }
             setStatsData(newStatsData);
         } catch (error) {

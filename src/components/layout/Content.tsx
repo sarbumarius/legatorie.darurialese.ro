@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Info, Package, AlertTriangle, ShoppingCart, Eye, Printer, Gift, Database, ChevronDown, ChevronUp, Download, ChevronLeft, ChevronRight, MessageSquare, Send } from "lucide-react";
+import { Check, X, Info, Package, AlertTriangle, ShoppingCart, Eye, Printer, Gift, Database, ChevronDown, ChevronUp, Download, ChevronLeft, ChevronRight, MessageSquare, Send, PlayCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,7 +67,7 @@ export const Content = ({
 
   // Form state for problem reporting
   const [problemZone, setProblemZone] = useState<string>("");
-  const [problemProduct, setProblemProduct] = useState<string>("");
+  const [problemProducts, setProblemProducts] = useState<string[]>([]);
   const [problemDescription, setProblemDescription] = useState<string>("");
 
   // State for tracking which command is being moved or started
@@ -83,15 +83,7 @@ export const Content = ({
   const [isSavingStock, setIsSavingStock] = useState(false);
   const [inventorySearchTerm, setInventorySearchTerm] = useState("");
 
-  // State for studiu modal
-  const [showStudiuModal, setShowStudiuModal] = useState(false);
-  const [studiuData, setStudiuData] = useState<any[]>([]);
-  const [isLoadingStudiu, setIsLoadingStudiu] = useState(false);
-  const [studiuError, setStudiuError] = useState<string | null>(null);
-  const [studiuMarkLoading, setStudiuMarkLoading] = useState<Record<number, boolean>>({});
 
-  // Orders grid columns on desktop (2/3/4), default 3, synced with Header select
-  const [desktopCols, setDesktopCols] = useState<number>(3);
 
   // State for mobile status expansion
   const [areStatusesExpanded, setAreStatusesExpanded] = useState(false);
@@ -135,6 +127,14 @@ export const Content = ({
         ...prev,
         [commandId]: !prev[commandId]
       }));
+    };
+
+    // Per-order selected preview index for large preview area
+    const [previewIndexByOrder, setPreviewIndexByOrder] = useState<Record<number, number>>({});
+    const getSelectedPreviewIndex = (orderId: number, total: number) => {
+      const idx = previewIndexByOrder[orderId];
+      if (typeof idx === 'number' && idx >= 0 && idx < total) return idx;
+      return 0;
     };
 
   // Function to encode URL to base64
@@ -188,13 +188,9 @@ export const Content = ({
       filtered = filtered.filter(comanda => comanda.ID !== movingCommandId);
     }
 
-    // We don't filter out commands that are being started
-    // This allows the command to remain visible while processing
-
-    // Sort orders with logprodebitare first
     filtered = filtered.sort((a, b) => {
-      if (a.logprogravare && !b.logprogravare) return -1;
-      if (!a.logprogravare && b.logprogravare) return 1;
+      if (a.logprolegatorie && !b.logprolegatorie) return -1;
+      if (!a.logprolegatorie && b.logprolegatorie) return 1;
       return 0;
     });
 
@@ -236,25 +232,6 @@ export const Content = ({
     setStartingCommandId(null);
   }, [zonaActiva]);
 
-  // Init desktop cols from localStorage and listen for changes from Header
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('desktopOrderCols');
-      const parsed = saved ? parseInt(saved, 10) : 3;
-      setDesktopCols(parsed === 2 || parsed === 4 ? parsed : 3);
-    } catch (e) {}
-    const handler = (e: Event) => {
-      const anyEvent = e as CustomEvent<number>;
-      const val = anyEvent?.detail;
-      if (val === 2 || val === 3 || val === 4) {
-        setDesktopCols(val);
-      }
-    };
-    window.addEventListener('order-cols-change', handler as EventListener);
-    return () => {
-      window.removeEventListener('order-cols-change', handler as EventListener);
-    };
-  }, []);
 
   // Function to fetch inventory data
   const fetchInventoryData = async () => {
@@ -264,7 +241,7 @@ export const Content = ({
       setNewStockValues({});
       setInventorySearchTerm("");
 
-      const response = await fetch('https://actium.ro/api/financiar/lista-raport-stocuri/sistem:gravare');
+      const response = await fetch('https://actium.ro/api/financiar/lista-raport-stocuri/sistem:legatorie');
 
       if (!response.ok) {
         throw new Error('Failed to fetch inventory data');
@@ -280,193 +257,10 @@ export const Content = ({
     }
   };
 
-  // Function to fetch studiu data
-  const fetchStudiuData = async () => {
-    try {
-      setIsLoadingStudiu(true);
-      setStudiuError(null);
-      setStudiuData([]);
 
-      const response = await fetch('https://crm.actium.ro/api/studiu', {
-        headers: {
-          'accept': 'application/json'
-        }
-      });
 
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || 'Eroare la încărcarea studiului');
-      }
 
-      const json = await response.json();
-      const items = Array.isArray(json?.data) ? json.data : [];
-      // Filter out items that have already been debited (true, 1, or '1')
-      const filtered = items.filter((it: any) => {
-        // Filter out items where am_gravat is true, 1, or '1'
-        if (it?.am_gravat === true || it?.am_gravat === 1 || it?.am_gravat === '1') {
-          return false;
-        }
 
-        // Also filter out items where all three fields are null
-        if (it?.am_gravat === null && it?.am_debitat === null && it?.am_printat === null) {
-          return false;
-        }
-
-        return true;
-      });
-      setStudiuData(filtered);
-    } catch (error) {
-      console.error('Error fetching studiu data:', error);
-      setStudiuError('A apărut o eroare la încărcarea studiului. Vă rugăm să încercați din nou.');
-      alert('A apărut o eroare la încărcarea studiului. Vă rugăm să încercați din nou.');
-    } finally {
-      setIsLoadingStudiu(false);
-    }
-  };
-
-  // Mark a studiu item as debitat
-  const handleMarkStudiuDebitat = async (id: number) => {
-    try {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: true }));
-
-      // Try POST first
-      let response = await fetch(`https://crm.actium.ro/api/studiu/debitat/${id}`, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-
-      // If POST is not allowed, fallback to GET
-      if (!response.ok && response.status === 405) {
-        response = await fetch(`https://crm.actium.ro/api/studiu/debitat/${id}`, {
-          method: 'GET',
-          headers: { 'accept': 'application/json' }
-        });
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Eroare la marcarea ca debitat');
-      }
-
-      // On success, remove item from list (since am_debitat === true should be filtered out)
-      setStudiuData(prev => prev.filter((it: any) => it?.id !== id));
-    } catch (e) {
-      console.error('Eroare la marcarea ca debitat:', e);
-      alert('A apărut o eroare la marcarea ca debitat. Încercați din nou.');
-    } finally {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: false }));
-    }
-  };
-
-  // Mark a studiu item as printat
-  const handleMarkStudiuPrintat = async (id: number) => {
-    try {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: true }));
-
-      // Try POST first
-      let response = await fetch(`https://crm.actium.ro/api/studiu/printat/${id}`, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-
-      // If POST is not allowed, fallback to GET
-      if (!response.ok && response.status === 405) {
-        response = await fetch(`https://crm.actium.ro/api/studiu/printat/${id}`, {
-          method: 'GET',
-          headers: { 'accept': 'application/json' }
-        });
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Eroare la marcarea ca printat');
-      }
-
-      // On success, remove item from list (since am_printat === true should be filtered out)
-      setStudiuData(prev => prev.filter((it: any) => it?.id !== id));
-    } catch (e) {
-      console.error('Eroare la marcarea ca printat:', e);
-      alert('A apărut o eroare la marcarea ca printat. Încercați din nou.');
-    } finally {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: false }));
-    }
-  };
-
-  // Mark a studiu item as gravat
-  const handleMarkStudiuGravat = async (id: number) => {
-    try {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: true }));
-
-      // Try POST first
-      let response = await fetch(`https://crm.actium.ro/api/studiu/gravat/${id}`, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-
-      // If POST is not allowed, fallback to GET
-      if (!response.ok && response.status === 405) {
-        response = await fetch(`https://crm.actium.ro/api/studiu/gravat/${id}`, {
-          method: 'GET',
-          headers: { 'accept': 'application/json' }
-        });
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Eroare la marcarea ca gravat');
-      }
-
-      // On success, remove item from list (since am_gravat === true should be filtered out)
-      setStudiuData(prev => prev.filter((it: any) => it?.id !== id));
-    } catch (e) {
-      console.error('Eroare la marcarea ca gravat:', e);
-      alert('A apărut o eroare la marcarea ca gravat. Încercați din nou.');
-    } finally {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: false }));
-    }
-  };
-
-  // Mark a studiu item as produs fizic
-  const handleMarkStudiuProdusFizic = async (id: number) => {
-    try {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: true }));
-
-      // Try POST first
-      let response = await fetch(`https://crm.actium.ro/api/studiu/produsfizic/${id}`, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-
-      // If POST is not allowed, fallback to GET
-      if (!response.ok && response.status === 405) {
-        response = await fetch(`https://crm.actium.ro/api/studiu/produsfizic/${id}`, {
-          method: 'GET',
-          headers: { 'accept': 'application/json' }
-        });
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Eroare la marcarea ca produs fizic');
-      }
-
-      // On success, remove item from list
-      setStudiuData(prev => prev.filter((it: any) => it?.id !== id));
-    } catch (e) {
-      console.error('Eroare la marcarea ca produs fizic:', e);
-      alert('A apărut o eroare la marcarea ca produs fizic. Încercați din nou.');
-    } finally {
-      setStudiuMarkLoading(prev => ({ ...prev, [id]: false }));
-    }
-  };
 
   // Function to handle saving stock values
   const handleSaveStockValues = async () => {
@@ -546,13 +340,17 @@ export const Content = ({
     try {
       const orderId = currentOrder?.ID ? `#${currentOrder.ID}` : '(fără ID)';
       const zona = problemZone || 'Grafica';
-      let produsNume = '';
-      if (currentOrder && Array.isArray(currentOrder.produse_finale)) {
-        const found = currentOrder.produse_finale.find((p: any) => String(p?.id_produs) === String(problemProduct));
-        produsNume = found?.nume || (problemProduct ? `Produs ${problemProduct}` : 'Produs nespecificat');
+      let produseText = '';
+      if (currentOrder && Array.isArray(currentOrder.produse_finale) && problemProducts.length > 0) {
+        const selectedNames = currentOrder.produse_finale
+          .filter((p: any) => problemProducts.includes(String(p?.id_produs)))
+          .map((p: any) => p?.nume || `Produs ${p?.id_produs}`);
+        produseText = selectedNames.length > 0 ? selectedNames.join(', ') : 'Produse nespecificate';
+      } else {
+        produseText = 'Produse nespecificate';
       }
       const descriere = problemDescription?.trim() || '(fără descriere)';
-      const msg = `Problema comandă ${orderId}\nZona: ${zona}\nProdus: ${produsNume}\nDescriere: ${descriere}`;
+      const msg = `Problema comandă ${orderId}\nZona: ${zona}\nProduse: ${produseText}\nDepartament: Legatorie\nDescriere: ${descriere}`;
       const mine = { from: 'eu' as const, text: msg, time: nowTime() };
       setChatMessages((prev) => [...prev, mine]);
       setShowChat(true);
@@ -569,7 +367,7 @@ export const Content = ({
 
     // Reset form and close modal
     setProblemZone("");
-    setProblemProduct("");
+    setProblemProducts([]);
     setProblemDescription("");
     setShowProblemModal(false);
   };
@@ -580,7 +378,7 @@ export const Content = ({
       // Set the moving command ID to show loading state
       setMovingCommandId(comandaId);
 
-      const response = await fetch(`https://crm.actium.ro/api/muta-gravare/${comandaId}/${userId}`, {
+      const response = await fetch(`https://crm.actium.ro/api/muta-legatorie/${comandaId}/${userId}`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -646,7 +444,7 @@ export const Content = ({
       // Set the starting command ID to show loading state
       setStartingCommandId(comandaId);
 
-      const response = await fetch(`https://crm.actium.ro/api/incepe-gravare/${comandaId}/${userId}`, {
+      const response = await fetch(`https://crm.actium.ro/api/incepe-legatorie/${comandaId}/${userId}`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -668,7 +466,7 @@ export const Content = ({
       setComenzi(prevComenzi => 
         prevComenzi.map(comanda => 
           comanda.ID === comandaId 
-            ? { ...comanda, logprogravare: true }
+            ? { ...comanda, logprolegatorie: true }
             : comanda
         )
       );
@@ -684,8 +482,8 @@ export const Content = ({
 
   return (
     <>
-      <main className={`${showChat ? 'pr-[15vw]' : ''} ml-32 mt-20 flex-1 backgroundculiniute`}>
-        <div className="grid grid-cols-1 sm:grid-cols-9 gap-2 mb-6 relative p-3 border border-b-1 border-border bg-white dark:bg-[#020817]  ">
+      <main className={`${showChat ? 'pr-[15vw]' : ''} ml-32 mt-20 flex-1 backgroundculiniute pb-16`}>
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2  relative p-3 border border-b-1 border-border bg-white dark:bg-[#020817]  ">
           {/* Mobile toggle button for expanding/collapsing statuses */}
           <div className="sm:hidden w-full mb-2 flex justify-center -mt-8">
             <Button 
@@ -897,142 +695,128 @@ export const Content = ({
           );
         })()}
 
-        <div className="mb-6 mx-3">
-          {/* Mobile view: flex layout */}
-          <div className="flex flex-col sm:hidden gap-3">
-            <div className="flex items-center gap-2 w-full">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Caută comenzi după nume sau ID..."
-                className="p-2 border rounded-md w-full text-sm bg-background text-foreground border-input placeholder:text-muted-foreground"
-              />
-            </div>
-          </div>
+        {/*<div className="mb-6 mx-3">*/}
+        {/*  /!* Mobile view: flex layout *!/*/}
+        {/*  <div className="flex flex-col sm:hidden gap-3">*/}
+        {/*    <div className="flex items-center gap-2 w-full">*/}
+        {/*      <input*/}
+        {/*        type="text"*/}
+        {/*        value={searchTerm}*/}
+        {/*        onChange={(e) => setSearchTerm(e.target.value)}*/}
+        {/*        placeholder="Caută comenzi după nume sau ID..."*/}
+        {/*        className="p-2 border rounded-md w-full text-sm bg-background text-foreground border-input placeholder:text-muted-foreground"*/}
+        {/*      />*/}
+        {/*    </div>*/}
+        {/*  </div>*/}
 
-          {/* Desktop view: 3-grid layout */}
-          <div className="hidden sm:grid md:grid-cols-3 gap-3 ">
+        {/*  /!* Desktop view: 3-grid layout (hidden in favor of bottom fixed bar) *!/*/}
+        {/*  <div className="hidden">*/}
 
-              {/* Middle grid: Inventory and Studiu buttons */}
-              <div className="flex gap-2 items-stretch">
-                  <Card
-                      className="p-2 cursor-pointer whitespace-nowrap transition-colors h-full flex items-center"
-                      onClick={() => {
-                          fetchInventoryData();
-                          setShowInventoryModal(true);
-                      }}
-                  >
-                      <div className="flex items-center gap-2">
-                          <div className="w-6 h-6  rounded flex items-center justify-center">
-                              <Database className="w-4 h-4 text-black dark:text-white" />
-                          </div>
-                          <span className="text-xs">Stocuri</span>
-                      </div>
-                  </Card>
-                  <Card
-                      className="p-2 cursor-pointer whitespace-nowrap transition-colors h-full flex items-center"
-                      onClick={() => {
-                          fetchStudiuData();
-                          setShowStudiuModal(true);
-                      }}
-                  >
-                      <div className="flex items-center gap-2">
-                          <div className="w-6 h-6  rounded flex items-center justify-center">
-                              <Info className="w-4 h-4 text-black dark:text-white" />
-                          </div>
-                          <span className="text-xs">Studiu</span>
-                      </div>
-                  </Card>
-                  {/* Filtru: All / Cu gravare / Cu printare */}
-                  <Card className="px-3 py-2 flex items-center">
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-muted-foreground">Filtru:</span>
-                      <label className="inline-flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="tipGrafica"
-                          value="all"
-                          checked={filterTipGrafica === 'all'}
-                          onChange={() => setFilterTipGrafica('all')}
-                          className="accent-blue-600"
-                        />
-                        <span>All</span>
-                      </label>
-                      <label className="inline-flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="tipGrafica"
-                          value="gravare"
-                          checked={filterTipGrafica === 'gravare'}
-                          onChange={() => setFilterTipGrafica('gravare')}
-                          className="accent-blue-600"
-                        />
-                        <span>Cu gravare</span>
-                      </label>
-                      <label className="inline-flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="tipGrafica"
-                          value="printare"
-                          checked={filterTipGrafica === 'printare'}
-                          onChange={() => setFilterTipGrafica('printare')}
-                          className="accent-blue-600"
-                        />
-                        <span>Cu printare</span>
-                      </label>
-                    </div>
-                  </Card>
-              </div>
+        {/*      /!* Middle grid: Inventory and Studiu buttons *!/*/}
+        {/*      <div className="flex gap-2 items-stretch">*/}
+        {/*          <Card*/}
+        {/*              className="p-2 cursor-pointer whitespace-nowrap transition-colors h-full flex items-center"*/}
+        {/*              onClick={() => {*/}
+        {/*                  fetchInventoryData();*/}
+        {/*                  setShowInventoryModal(true);*/}
+        {/*              }}*/}
+        {/*          >*/}
+        {/*              <div className="flex items-center gap-2">*/}
+        {/*                  <div className="w-6 h-6  rounded flex items-center justify-center">*/}
+        {/*                      <Database className="w-4 h-4 text-black dark:text-white" />*/}
+        {/*                  </div>*/}
+        {/*                  <span className="text-xs">Stocuri</span>*/}
+        {/*              </div>*/}
+        {/*          </Card>*/}
+        {/*          /!* Filtru: All / Cu gravare / Cu printare *!/*/}
+        {/*          /!*<Card className="px-3 py-2 flex items-center">*!/*/}
+        {/*          /!*  <div className="flex items-center gap-3 text-xs">*!/*/}
+        {/*          /!*    <span className="text-muted-foreground">Filtru:</span>*!/*/}
+        {/*          /!*    <label className="inline-flex items-center gap-1 cursor-pointer">*!/*/}
+        {/*          /!*      <input*!/*/}
+        {/*          /!*        type="radio"*!/*/}
+        {/*          /!*        name="tipGrafica"*!/*/}
+        {/*          /!*        value="all"*!/*/}
+        {/*          /!*        checked={filterTipGrafica === 'all'}*!/*/}
+        {/*          /!*        onChange={() => setFilterTipGrafica('all')}*!/*/}
+        {/*          /!*        className="accent-blue-600"*!/*/}
+        {/*          /!*      />*!/*/}
+        {/*          /!*      <span>All</span>*!/*/}
+        {/*          /!*    </label>*!/*/}
+        {/*          /!*    <label className="inline-flex items-center gap-1 cursor-pointer">*!/*/}
+        {/*          /!*      <input*!/*/}
+        {/*          /!*        type="radio"*!/*/}
+        {/*          /!*        name="tipGrafica"*!/*/}
+        {/*          /!*        value="gravare"*!/*/}
+        {/*          /!*        checked={filterTipGrafica === 'gravare'}*!/*/}
+        {/*          /!*        onChange={() => setFilterTipGrafica('gravare')}*!/*/}
+        {/*          /!*        className="accent-blue-600"*!/*/}
+        {/*          /!*      />*!/*/}
+        {/*          /!*      <span>Cu gravare</span>*!/*/}
+        {/*          /!*    </label>*!/*/}
+        {/*          /!*    <label className="inline-flex items-center gap-1 cursor-pointer">*!/*/}
+        {/*          /!*      <input*!/*/}
+        {/*          /!*        type="radio"*!/*/}
+        {/*          /!*        name="tipGrafica"*!/*/}
+        {/*          /!*        value="printare"*!/*/}
+        {/*          /!*        checked={filterTipGrafica === 'printare'}*!/*/}
+        {/*          /!*        onChange={() => setFilterTipGrafica('printare')}*!/*/}
+        {/*          /!*        className="accent-blue-600"*!/*/}
+        {/*          /!*      />*!/*/}
+        {/*          /!*      <span>Cu printare</span>*!/*/}
+        {/*          /!*    </label>*!/*/}
+        {/*          /!*  </div>*!/*/}
+        {/*          /!*</Card>*!/*/}
+        {/*      </div>*/}
 
-            {/* Left grid: Search input */}
-            <div className="flex items-center">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Caută comenzi după nume sau ID..."
-                className="p-2 border rounded-md w-full text-sm bg-background text-foreground border-input placeholder:text-muted-foreground"
-              />
-            </div>
+        {/*    /!* Left grid: Search input *!/*/}
+        {/*    <div className="flex items-center">*/}
+        {/*      <input*/}
+        {/*        type="text"*/}
+        {/*        value={searchTerm}*/}
+        {/*        onChange={(e) => setSearchTerm(e.target.value)}*/}
+        {/*        placeholder="Caută comenzi după nume sau ID..."*/}
+        {/*        className="p-2 border rounded-md w-full text-sm bg-background text-foreground border-input placeholder:text-muted-foreground"*/}
+        {/*      />*/}
+        {/*    </div>*/}
 
 
 
-            {/* Right grid: Shipping dates */}
-            <div className="flex justify-end">
-              <div className="flex flex-wrap gap-1">
-                {uniqueShippingDates.map((date, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedShippingData(selectedShippingData === date ? null : date)}
-                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                      selectedShippingData === date 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-secondary text-secondary-foreground hover:opacity-90'
-                    }`}
-                  >
-                    {date}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          {/*{selectedShippingData && (*/}
-          {/*    <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">*/}
-          {/*      <div className="flex items-center gap-2">*/}
-          {/*        <span className="text-blue-700 text-sm font-medium">Filtrare după data de expediere:</span>*/}
-          {/*        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">{selectedShippingData}</span>*/}
-          {/*      </div>*/}
-          {/*      <button*/}
-          {/*          onClick={() => setSelectedShippingData(null)}*/}
-          {/*          className="p-1 bg-blue-200 hover:bg-blue-300 rounded-full flex items-center justify-center"*/}
-          {/*      >*/}
-          {/*        <X size={16} className="text-blue-700" />*/}
-          {/*      </button>*/}
-          {/*    </div>*/}
-          {/*)}*/}
+        {/*    /!* Right grid: Shipping dates *!/*/}
+        {/*    <div className="flex justify-end">*/}
+        {/*      <div className="flex flex-wrap gap-1">*/}
+        {/*        {uniqueShippingDates.map((date, index) => (*/}
+        {/*          <button*/}
+        {/*            key={index}*/}
+        {/*            onClick={() => setSelectedShippingData(selectedShippingData === date ? null : date)}*/}
+        {/*            className={`px-2 py-1 text-xs rounded-md transition-colors ${*/}
+        {/*              selectedShippingData === date */}
+        {/*                ? 'bg-primary text-primary-foreground' */}
+        {/*                : 'bg-secondary text-secondary-foreground hover:opacity-90'*/}
+        {/*            }`}*/}
+        {/*          >*/}
+        {/*            {date}*/}
+        {/*          </button>*/}
+        {/*        ))}*/}
+        {/*      </div>*/}
+        {/*    </div>*/}
+        {/*  </div>*/}
+        {/*  /!*{selectedShippingData && (*!/*/}
+        {/*  /!*    <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">*!/*/}
+        {/*  /!*      <div className="flex items-center gap-2">*!/*/}
+        {/*  /!*        <span className="text-blue-700 text-sm font-medium">Filtrare după data de expediere:</span>*!/*/}
+        {/*  /!*        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">{selectedShippingData}</span>*!/*/}
+        {/*  /!*      </div>*!/*/}
+        {/*  /!*      <button*!/*/}
+        {/*  /!*          onClick={() => setSelectedShippingData(null)}*!/*/}
+        {/*  /!*          className="p-1 bg-blue-200 hover:bg-blue-300 rounded-full flex items-center justify-center"*!/*/}
+        {/*  /!*      >*!/*/}
+        {/*  /!*        <X size={16} className="text-blue-700" />*!/*/}
+        {/*  /!*      </button>*!/*/}
+        {/*  /!*    </div>*!/*/}
+        {/*  /!*)}*!/*/}
 
-        </div>
+        {/*</div>*/}
 
 
 
@@ -1068,158 +852,13 @@ export const Content = ({
 
             {displayedComenzi.length > 0 && (
                 <div
-                    className={`${desktopCols === 2
-                        ? 'md:columns-2'
-                        : desktopCols === 4
-                            ? 'md:columns-4'
-                            : 'md:columns-3'
-                    } columns-1 gap-x-6`}
+                    className={`columns-1 md:columns-1 gap-x-6`}
                 >
                     {displayedComenzi.map((comanda) => (
-                        <Card
+                        <div
                             key={comanda.ID}
-                            className={`p-4 bg-card relative mb-6 break-inside-avoid block ${comanda.logprogravare ? 'blue-shadow-pulse' : ''}`}
+                            className={`p-0 `}
                         >
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">
-                        {comanda.shipping_details._shipping_first_name} {comanda.shipping_details._shipping_last_name}{" "}
-                        <a 
-                          href={`https://darurialese.com/wp-admin/post.php?post=${comanda.ID}&action=edit`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline"
-                        >
-                          #{comanda.ID}
-                        </a>
-                      </h3>
-                    </div>
-                    <div className="flex flex-col items-end space-y-1 bg-white p-1 rounded-3xl">
-                      {comanda.ramburs === "FanCurier 0" ? (
-                        <div className="courier-card">
-                          <img src="/curieri/fan.jpg" alt="fan" className="w-10 h-6 object-contain" />
-                        </div>
-                      ) : comanda.ramburs === "FanCurier" ? (
-                        <div className="courier-card">
-                          <img src="/curieri/fan.jpg" alt="FAN Courier" className="w-10 h-6 object-contain" />
-                        </div>
-                      ) : comanda.ramburs === "DPD 0" ? (
-                        <div className="courier-card">
-                          <img src="/curieri/dpd.jpg" alt="dpd Courier" className="w-10 h-6 object-contain" />
-                        </div>
-                      ) : comanda.ramburs === "DPD" ? (
-                        <div className="courier-card">
-                          <img src="/curieri/dpd.jpg" alt="DPD" className="w-10 h-6 object-contain" />
-                        </div>
-                      ) : (
-                       <>
-                       </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Alert: Anexe diferite - ascuns conform cerinței */}
-                  {false && (() => {
-                    const ad: any = (comanda as any)?.anexe_diferite_comanda;
-                    const flag = (ad && (ad.anexe_diferite_comanda === '1' || ad.anexe_diferite_comanda === 1 || ad.anexe_diferite_comanda === true))
-                      || ad === '1' || ad === 1 || ad === true;
-                    if (!flag) return null;
-                    return (
-                      <div className="w-full mb-3">
-                        <div className="w-full rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
-                          Atentie: Anexe diferite!
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Alerte: Anexe diferite / Cantitate diferita / Atentie Pix */}
-                  {(() => {
-                    // Anexe diferite flag (existing logic)
-                    const ad: any = (comanda as any)?.anexe_diferite_comanda;
-                    const hasAnexeDiferite = (ad && (ad.anexe_diferite_comanda === '1' || ad.anexe_diferite_comanda === 1 || ad.anexe_diferite_comanda === true))
-                      || ad === '1' || ad === 1 || ad === true;
-
-                    // Cantitate diferita: any product has quantity > 1
-                    const hasCantitateDiferita = Array.isArray(comanda.produse_finale)
-                      && comanda.produse_finale.some((p: any) => {
-                        const q = typeof p?.quantity === 'string' ? parseFloat(p.quantity) : p?.quantity;
-                        return Number(q) > 1;
-                      });
-
-                    // Atenție Pix: atentie_pix = 1/true/'1'
-                    const ap: any = (comanda as any)?.atentie_pix;
-                    const hasAtentiePix = ap === '1' || ap === 1 || ap === true;
-
-                    if (!hasAnexeDiferite && !hasCantitateDiferita && !hasAtentiePix) return null;
-
-                    return (
-                      <div className="w-full mb-3">
-                        <div className=" gap-2">
-                          {hasAnexeDiferite && (
-                            <div className="mb-2 rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
-                              Atentie: Anexe diferite!
-                            </div>
-                          )}
-                          {hasCantitateDiferita && (
-                            <div className="mb-2 rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
-                              Atentie: Cantitate diferita!
-                            </div>
-                          )}
-                          {hasAtentiePix && (
-                            <div className="rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
-                              Atentie: Pix!
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Alert: Refacut - motiv afișat când refacut = 1 */}
-                  {(() => {
-                    const rf: any = (comanda as any)?.refacut;
-                    const isRefacut = rf === '1' || rf === 1 || rf === true;
-                    const motiv = (comanda as any)?.motiv_refacut;
-                    const motivText = typeof motiv === 'string' ? motiv.trim() : '';
-                    if (!isRefacut || !motivText) return null;
-                    return (
-                      <div className="w-full mb-3">
-                        <div className="rounded-md border px-3 py-2 text-xs font-medium bg-red-50 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700">
-                          Motiv refăcut: {motivText}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="bg-muted/30 p-2 rounded-md mb-3">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs">
-                      <div className="flex flex-col">
-                        <span className="text-muted-foreground">Expediere</span>
-                        <span 
-                          className={`font-semibold ${
-                            selectedShippingData === formatDate(comanda.expediere).split(' ')[0].replace(',', '') 
-                              ? 'bg-blue-100 text-blue-800 px-1 rounded' 
-                              : ''
-                          }`}
-                        >
-                          {formatDate(comanda.expediere).split(' ')[0].replace(',', '')}
-                        </span>
-                      </div>
-                      <div className="flex flex-col border-l border-border pl-2">
-                        <span className="text-muted-foreground">Intrat pe</span>
-                        <span className="font-semibold">{formatDate(comanda.post_date).split(' ')[0]}</span>
-                      </div>
-                      <div className="flex flex-col border-l border-border pl-2">
-                        <span className="text-muted-foreground">Bucăți</span>
-                        <span className="font-semibold">{comanda.total_buc}</span>
-                      </div>
-                      <div className="flex flex-col border-l border-border pl-2  rounded-r">
-                        <span className="text-muted-foreground">Preț</span>
-                        <span className="font-bold">{comanda.order_total_formatted}</span>
-                      </div>
-                    </div>
-                  </div>
 
                   <div className="md:hidden w-full flex justify-between items-center bg-muted/20 p-2 rounded-md mb-3">
                     <span className="text-xs font-medium">Detalii</span>
@@ -1237,245 +876,376 @@ export const Content = ({
                     </Button>
                   </div>
 
-                  {/* Combined collapsible content - always visible on desktop, collapsible on mobile */}
-                  <div className={`${expandedSections[comanda.ID] ? 'block' : 'hidden'} md:block space-y-3`}>
-                    {/* Gravare/Print section */}
-                    <div className="flex items-center bg-muted/20 p-2 rounded-md">
-                      <div className="flex items-center space-x-1">
-                        <span className="text-xs text-muted-foreground"><span className="md:inline hidden">Gravare:</span><span className="md:hidden inline">Grav.:</span></span>
-                        {comanda.gravare ? (
-                          <div className="w-6 h-6 bg-muted border border-border rounded-md flex items-center justify-center text-black dark:text-white">
-                            <Check className="w-4 h-4" />
-                          </div>
-                        ) : (
-                          <X className="w-3.5 h-3.5 text-gray-400" />
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-1 ml-3">
-                        <span className="text-xs text-muted-foreground"><span className="md:inline hidden">Printare:</span><span className="md:hidden inline">Print.:</span></span>
-                        {comanda.printare ? (
-                          <div className="w-6 h-6 bg-muted border border-border rounded-md flex items-center justify-center text-black dark:text-white">
-                            <Check className="w-4 h-4" />
-                          </div>
-                        ) : (
-                          <X className="w-3.5 h-3.5 text-gray-400" />
-                        )}
-                      </div>
-
-                      <div className="ml-auto flex items-center space-x-1.5 justify-end">
-                        {/*<a */}
-                        {/*  href={`https://crm.actium.ro/api/generare-bon-debitare/${comanda.ID}`}*/}
-                        {/*  target="_blank"*/}
-                        {/*  rel="noopener noreferrer"*/}
-                        {/*  className="w-7 h-7 bg-muted hover:bg-muted/80 rounded-full flex items-center justify-center cursor-pointer"*/}
-                        {/*>*/}
-                        {/*  <Eye className="w-4 h-4 text-muted-foreground" />*/}
-                        {/*</a>*/}
-                        {/*<a */}
-                        {/*  href={`https://crm.actium.ro/api/generare-bon-debitare/${comanda.ID}`}*/}
-                        {/*  target="_blank"*/}
-                        {/*  rel="noopener noreferrer"*/}
-                        {/*  className="w-7 h-7 bg-muted hover:bg-muted/80 rounded-full flex items-center justify-center cursor-pointer"*/}
-                        {/*>*/}
-                        {/*  <Printer className="w-4 h-4 text-muted-foreground" />*/}
-                        {/*</a>*/}
-                        {comanda.previzualizare_galerie && comanda.previzualizare_galerie.length > 0 && (
-                          <div 
-                            className="w-7 h-7 bg-muted hover:bg-muted/80 rounded-full flex items-center justify-center cursor-pointer"
-                            onClick={() => {
-                              setGalleryImages(comanda.previzualizare_galerie || []);
-                              setShowGalleryModal(true);
-                            }}
-                            title="Previzualizare galerie"
-                          >
-                            <Gift className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div 
-                          className="w-7 h-7 bg-muted hover:bg-muted/80 rounded-full flex items-center justify-center cursor-pointer"
-                          onClick={() => {
-                            setCurrentOrder(comanda);
-                            setShowProblemModal(true);
-                          }}
-                        >
-                          <AlertTriangle className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Panoul inline din card a fost mutat sus, sub statusurile mari */}
-                    {null}
-
-                    {/* Product images section - grid cu maxim 6 rânduri */}
-                    <div className="grid grid-cols-6  gap-2">
-                      {comanda.produse_finale.map((produs, idx) => (
-                        <div key={idx} className="flex items-center space-x-2 bg-muted/10 rounded">
-                          <div className="relative">
-                            <img
-                              src={produs.poza ? `https://darurialese.com/wp-content/uploads/${produs.poza}` : "/api/placeholder/48/48"}
-                              alt="Product"
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                              {produs.quantity}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {comanda.produse_finale.length === 1 && (
-                        Array.from({ length: 5 }).map((_, i) => (
-                          <div key={`ph-${i}`} className="flex items-center space-x-2">
-                            <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-900 animate-pulse" />
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {/* Graphic files section (grouped by Gravare and Printare; shown when logprogravare and files exist) */}
-                    {comanda.logprogravare && Array.isArray(comanda.download_fisiere_grafica) && (
-                      (() => {
-                        // Group files by type based on extension
-                        const gravareExt = ['svg', 'ai', 'dxf'];
-                        const printExt = ['eps', 'pdf']; // include pdf as print candidate if present
-
-                        const gravareFiles = comanda.download_fisiere_grafica.filter((file: any) => {
-                          if (typeof file !== 'string') return false;
-                          const fileName = file.includes('/') ? file.split('/').pop() : file;
-                          const ext = (fileName?.split('.').pop() || '').toLowerCase();
-                          return gravareExt.includes(ext);
-                        });
-
-                        const printFiles = comanda.download_fisiere_grafica.filter((file: any) => {
-                          if (typeof file !== 'string') return false;
-                          const fileName = file.includes('/') ? file.split('/').pop() : file;
-                          const ext = (fileName?.split('.').pop() || '').toLowerCase();
-                          return printExt.includes(ext);
-                        });
-
-
-                        const renderFileChip = (file: string, colorClass: string) => {
-                          const fileName = file.includes('/') ? file.split('/').pop() || '' : file;
-                          const baseName = fileName.replace(/\.[^.]+$/, ''); // remove extension
-                          const downloadHref = `https://crm.actium.ro/api/download/${encodeToBase64(`https://darurialese.ro/wp-content/uploads/${file}`)}`;
-                          return (
-                            <a
-                              key={file}
-                              href={downloadHref}
-                              download
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`flex items-center justify-center gap-1 ${colorClass} px-2 py-2 rounded text-xs transition-colors w-full`}
-                              title={`Descarcă fișier ${fileName}`}
-                            >
-                              <span className="w-4 h-4  rounded flex items-center justify-center text-white text-xs font-bold">🡇</span>
-
-                            </a>
-                          );
-                        };
-
-                        return (
-                          <div className="bg-muted/10 p-2 rounded grid grid-cols-2 gap-2 border border-1 border-gray-300 dark:border-gray-800">
-
-                            {(() => {
-                              const gc = gravareFiles.length === 1 ? 'grid-cols-1' : gravareFiles.length === 2 ? 'grid-cols-2' : gravareFiles.length === 4 ? 'grid-cols-4' : 'grid-cols-3';
-                              return (
-                                <div className="mb-2">
-                                  <div className="text-xs font-semibold mb-1">Gravare ({gravareFiles.length})</div>
-                                  <div className={`grid gap-2 ${gc}`}>
-                                    {gravareFiles.length > 0 ? (
-                                      gravareFiles.map((f: string) => (
-                                        <div key={f} className="min-w-0">{renderFileChip(f, 'bg-gray-700')}</div>
-                                      ))
-                                    ) : (
-                                      Array.from({ length: 4 }).map((_, i) => (
-                                        <div key={`grav-sk-${i}`} className="min-w-0">
-                                          <div className="h-8  rounded  w-full" />
-                                        </div>
-                                      ))
-                                    )}
+                  {/* Combined content remade into 2-column layout (main + aside) */}
+                  <div className={`${expandedSections[comanda.ID] ? 'block' : 'hidden'} md:block`}>
+                    <div className=" mx-auto px-2">
+                      <header className="mb-6" />
+                      <div className="grid grid-cols-4 gap-6">
+                          <aside className="col-span-1  md:sticky md:top-24 xl:top-24 h-fit self-start">
+                              <div className="flex items-center justify-between mb-3">
+                                  <div>
+                                      <h3 className="text-lg font-semibold text-foreground">
+                                          {comanda.shipping_details._shipping_first_name} {comanda.shipping_details._shipping_last_name}{" "}
+                                          <a
+                                              href={`https://darurialese.com/wp-admin/post.php?post=${comanda.ID}&action=edit`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-500 hover:underline"
+                                          >
+                                              #{comanda.ID}
+                                          </a>
+                                      </h3>
                                   </div>
-                                </div>
-                              );
-                            })()}
-
-                            {(() => {
-                              const pc = printFiles.length === 1 ? 'grid-cols-1' : printFiles.length === 2 ? 'grid-cols-2' : printFiles.length === 4 ? 'grid-cols-4' : 'grid-cols-3';
-                              return (
-                                <div>
-                                  <div className="text-xs font-semibold mb-1">Printare ({printFiles.length})</div>
-                                  <div className={`grid gap-2 ${pc}`}>
-                                    {printFiles.length > 0 ? (
-                                      printFiles.map((f: string) => (
-                                        <div key={f} className="min-w-0">{renderFileChip(f, 'bg-green-600')}</div>
-                                      ))
-                                    ) : (
-                                      Array.from({ length: 4 }).map((_, i) => (
-                                        <div key={`print-sk-${i}`} className="min-w-0">
-                                          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-full" />
-                                        </div>
-                                      ))
-                                    )}
+                                  <div className="flex flex-col items-end space-y-1 bg-white p-1 rounded-3xl">
+                                      {comanda.ramburs === "FanCurier 0" ? (
+                                          <div className="courier-card">
+                                              <img src="/curieri/fan.jpg" alt="fan" className="w-10 h-6 object-contain" />
+                                          </div>
+                                      ) : comanda.ramburs === "FanCurier" ? (
+                                          <div className="courier-card">
+                                              <img src="/curieri/fan.jpg" alt="FAN Courier" className="w-10 h-6 object-contain" />
+                                          </div>
+                                      ) : comanda.ramburs === "DPD 0" ? (
+                                          <div className="courier-card">
+                                              <img src="/curieri/dpd.jpg" alt="dpd Courier" className="w-10 h-6 object-contain" />
+                                          </div>
+                                      ) : comanda.ramburs === "DPD" ? (
+                                          <div className="courier-card">
+                                              <img src="/curieri/dpd.jpg" alt="DPD" className="w-10 h-6 object-contain" />
+                                          </div>
+                                      ) : (
+                                          <>
+                                          </>
+                                      )}
                                   </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        );
-                      })()
-                    )}
+                              </div>
 
-                    {/* Action buttons section */}
-                    <div>
-                      {comanda.logprogravare ? (
-                        <div className="text-xs text-muted-foreground">
-                          {/* Only show the button for production, dpd, fan, and client approval - hide for gravare and legatorie */}
-                          {(zonaActiva !== 'productie' && zonaActiva !== 'legatorie') && (
-                            <Button 
-                              className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 text-base"
-                              onClick={() => handleMutaClick(comanda.ID)}
-                              disabled={movingCommandId === comanda.ID}
-                            >
-                              {movingCommandId === comanda.ID ? (
-                                <div className="flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                  Se procesează...
+                              {/* Alerte (warning) */}
+                              {(() => {
+                                  const ad: any = (comanda as any)?.anexe_diferite_comanda;
+                                  const hasAnexeDiferite = (ad && (ad.anexe_diferite_comanda === '1' || ad.anexe_diferite_comanda === 1 || ad.anexe_diferite_comanda === true))
+                                      || ad === '1' || ad === 1 || ad === true;
+
+                                  const hasCantitateDiferita = Array.isArray(comanda.produse_finale)
+                                      && comanda.produse_finale.some((p: any) => {
+                                          const q = typeof p?.quantity === 'string' ? parseFloat(p.quantity) : p?.quantity;
+                                          return Number(q) > 1;
+                                      });
+
+                                  const ap: any = (comanda as any)?.atentie_pix;
+                                  const hasAtentiePix = ap === '1' || ap === 1 || ap === true;
+
+                                  // Licheni: poate veni ca obiect { licheni_diferiti: '1' } sau alte forme
+                                  const al: any = (comanda as any)?.atentie_licheni;
+                                  const licheniObj = (al && typeof al === 'object') ? al : null;
+                                  const licheniDiferitiRaw = licheniObj ? (licheniObj as any).licheni_diferiti : (al as any);
+                                  const hasAtentieLicheniDiferiti = (licheniDiferitiRaw === '1' || licheniDiferitiRaw === 1 || licheniDiferitiRaw === true);
+
+                                  if (!hasAnexeDiferite && !hasCantitateDiferita && !hasAtentiePix && !hasAtentieLicheniDiferiti) return null;
+
+                                  return (
+                                      <section aria-live="polite">
+                                          <div className=" gap-2">
+                                              {hasAnexeDiferite && (
+                                                  <div className="mb-2 rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
+                                                      Atentie: Anexe diferite!
+                                                  </div>
+                                              )}
+                                              {hasCantitateDiferita && (
+                                                  <div className="mb-2 rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
+                                                      Atentie: Cantitate diferita!
+                                                  </div>
+                                              )}
+                                              {hasAtentiePix && (
+                                                  <div className="mb-2 rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
+                                                      Atentie: Pix!
+                                                  </div>
+                                              )}
+                                              {hasAtentieLicheniDiferiti && (
+                                                  <div className="rounded-md border px-3 py-2 text-xs font-medium bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700">
+                                                      Atentie: Licheni diferiți!
+                                                  </div>
+                                              )}
+                                          </div>
+                                      </section>
+                                  );
+                              })()}
+
+                              {/* Motiv refăcut (danger) */}
+                              {(() => {
+                                  const rf: any = (comanda as any)?.refacut;
+                                  const isRefacut = rf === '1' || rf === 1 || rf === true;
+                                  const motiv = (comanda as any)?.motiv_refacut;
+                                  const motivText = typeof motiv === 'string' ? motiv.trim() : '';
+                                  if (!isRefacut || !motivText) return null;
+                                  return (
+                                      <section>
+                                          <div className=" mt-2 rounded-md border px-3 py-2 text-xs font-medium bg-red-50 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700">
+                                              Motiv refăcut: {motivText}
+                                          </div>
+                                      </section>
+                                  );
+                              })()}
+
+                              {/* Grid info */}
+                              <section className="grid grid-cols-2 gap-4 text-xs bg-white border border-border border-b-0  p-2 rounded-t-lg mt-2">
+                                  <div className="flex flex-col">
+                                      <span className="text-muted-foreground">Expediere</span>
+                                      <span className="font-semibold">
+                                {formatDate(comanda.expediere).split(' ')[0].replace(',', '')}
+                              </span>
+                                  </div>
+
+
+                                  <div className="flex flex-col">
+                                      <span className="text-muted-foreground">Preț</span>
+                                      <span className="font-bold">{comanda.order_total_formatted} ({comanda.total_buc} buc)</span>
+                                  </div>
+
+                              </section>
+
+                              {/* Gravare/Printare (stânga) + Acțiuni (dreapta) */}
+                              <section className="flex items-center justify-between gap-4 bg-white border border-border rounded-b-lg p-2 mb-2">
+                                  <div className="flex items-center gap-4">
+                                      <div className="flex items-center gap-2">
+                                          <span className="text-xs text-muted-foreground">Gravare</span>
+                                          {comanda.gravare ? (
+                                              <div className="w-6 h-6 bg-muted border border-border rounded-md flex items-center justify-center text-black dark:text-white">
+                                                  <Check className="w-4 h-4" />
+                                              </div>
+                                          ) : (
+                                              <X className="w-3.5 h-3.5 text-gray-400" />
+                                          )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                          <span className="text-xs text-muted-foreground">Printare</span>
+                                          {comanda.printare ? (
+                                              <div className="w-6 h-6 bg-muted border border-border rounded-md flex items-center justify-center text-black dark:text-white">
+                                                  <Check className="w-4 h-4" />
+                                              </div>
+                                          ) : (
+                                              <X className="w-3.5 h-3.5 text-gray-400" />
+                                          )}
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      {comanda.previzualizare_galerie && comanda.previzualizare_galerie.length > 0 && (
+                                          <button
+                                              type="button"
+                                              className="w-7 h-7 bg-muted hover:bg-muted/80 rounded-full flex items-center justify-center"
+                                              onClick={() => { setGalleryImages(comanda.previzualizare_galerie || []); setShowGalleryModal(true); }}
+                                              aria-label="Previzualizare galerie"
+                                          >
+                                              <Gift className="w-4 h-4 text-muted-foreground" />
+                                          </button>
+                                      )}
+                                      <button
+                                          type="button"
+                                          className="w-7 h-7 bg-muted hover:bg-muted/80 rounded-full flex items-center justify-center"
+                                          onClick={() => { setCurrentOrder(comanda); setShowProblemModal(true); }}
+                                          aria-label="Raportează problemă"
+                                      >
+                                          <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                                      </button>
+                                  </div>
+                              </section>
+
+                              {/* Cadou din comandă (dacă există) */}
+                              {(() => {
+                                  const pcn: any = (comanda as any)?.produs_cadou_nou;
+                                  if (!pcn) return null;
+                                  const slug = typeof pcn?.produs_cadou_nou === 'string' ? pcn.produs_cadou_nou.trim() : '';
+                                  const personal = typeof pcn?.personalizare_cadou_comanda === 'string' ? pcn.personalizare_cadou_comanda.trim() : '';
+                                  const imgUrl = slug ? `https://darurialese.com/wp-content/themes/woodmart-child/img/cadouri-comanda/${slug}.png` : '';
+                                  if (!imgUrl && !personal) return null;
+                                  return (
+                                      <section className="flex items-center gap-3 bg-white border border-border rounded-md p-2 mb-2">
+                                          {imgUrl ? (
+                                              <img src={imgUrl} alt="Cadou din comandă" className="w-14 h-14 rounded-md border object-contain bg-white" />
+                                          ) : null}
+                                          {personal ? (
+                                              <div className="text-xs leading-tight">
+                                                  <div className="text-muted-foreground">Personalizare cadou</div>
+                                                  <div className="font-medium break-words">{personal}</div>
+                                              </div>
+                                          ) : null}
+                                      </section>
+                                  );
+                              })()}
+
+
+                              {/* CTA desktop în aside */}
+                              <section>
+                                  {comanda.logprolegatorie ? (
+                                      (zonaActiva !== 'productie' && zonaActiva !== 'gravare') && (
+                                          <Button
+                                              className="w-full py-4 rounded-2xl shadow font-medium bg-green-500 hover:bg-green-600"
+                                              onClick={() => handleMutaClick(comanda.ID)}
+                                              disabled={movingCommandId === comanda.ID}
+                                          >
+                                              {movingCommandId === comanda.ID ? 'Se procesează...' : 'Muta ➦'}
+                                          </Button>
+                                      )
+                                  ) : (
+                                      (zonaActiva === 'legatorie' || zonaActiva === 'dpd' || zonaActiva === 'fan') && (
+                                          <Button
+                                              className="w-full py-4 rounded-2xl shadow font-medium bg-orange-500 hover:bg-orange-600"
+                                              onClick={() => handleIncepeDebitareClick(comanda.ID)}
+                                              disabled={startingCommandId === comanda.ID}
+                                          >
+                                              {startingCommandId === comanda.ID ? 'Se procesează...' : 'Începe procesul →'}
+                                          </Button>
+                                      )
+                                  )}
+                              </section>
+                          </aside>
+
+                          <main className="col-span-3 space-y-4">
+
+                          {/* Produse în format 2 coloane (preview stânga, produs dreapta) */}
+                          <section className={`space-y-4 bg-white border ${((comanda as any)?.refacut === '1' || (comanda as any)?.refacut === 1 || (comanda as any)?.refacut === true) && (typeof (comanda as any)?.motiv_refacut === 'string' && (comanda as any)?.motiv_refacut.trim() !== '') ? 'border-red-500' : 'border-border'} rounded-lg p-4 relative`}>
+                            {!comanda.logprolegatorie && (
+                              <div className="pointer-events-none sticky top-1/2 z-10 -translate-y-1/2 transform">
+                                <div className="w-full flex items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleIncepeDebitareClick(comanda.ID)}
+                                    className="pointer-events-auto rounded-full w-16 h-16 md:w-20 md:h-20 flex items-center justify-center bg-orange-500 hover:bg-orange-600 text-white shadow-lg ring-4 ring-orange-500/20 animate-pulse"
+                                    title="Începe comanda"
+                                    aria-label="Începe comanda"
+                                  >
+                                    <PlayCircle className="w-10 h-10 md:w-12 md:h-12" />
+                                  </button>
                                 </div>
-                              ) : (
-                                "Muta ➦"
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          {/* Only show the button for production, dpd, fan, and client approval */}
-                          {(zonaActiva === 'gravare' || zonaActiva === 'dpd' || zonaActiva === 'fan' ) && (
-                            <Button 
-                              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 text-base"
-                              onClick={() => handleIncepeDebitareClick(comanda.ID)}
-                              disabled={startingCommandId === comanda.ID}
-                            >
-                              {startingCommandId === comanda.ID ? (
-                                <div className="flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                  Se procesează...
-                                </div>
-                              ) : (
-                                "Incepe procesul ➦"
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      )}
+                              </div>
+                            )}
+                            {comanda.produse_finale.map((produs, idx) => {
+                              const title = produs?.nume || 'Produs';
+                              const qty = (produs as any)?.quantity ?? '1';
+                              const productImg = produs?.poza ? `https://darurialese.com/wp-content/uploads/${produs.poza}` : '/api/placeholder/640/360';
+                              const hasPrev = Array.isArray(comanda.previzualizare_galerie) && comanda.previzualizare_galerie.length > 0;
+                              const prevCandidate = hasPrev && comanda.previzualizare_galerie[idx] ? comanda.previzualizare_galerie[idx] : (hasPrev ? comanda.previzualizare_galerie[0] : null);
+                              const previewImg = prevCandidate ? `https://darurialese.ro/wp-content/uploads/${prevCandidate}` : productImg;
+                              return (
+                                <React.Fragment key={idx}>
+                                  <div className={`grid grid-cols-2 bg-white rounded mb-4 ${!comanda.logprolegatorie ? 'blur-sm opacity-50' : ''}`}>
+                                    <div className="mb-3 col-span-2 inline-flex items-center justify-items-center px-1 py-1 pr-4 text-sm text-gray-700 bg-gray-100 rounded-full dark:bg-gray-800 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Component requires Flowbite JavaScript">
+                                      <span aria-hidden="true" className="text-xs bg-orange-600 rounded-full text-white px-3 py-1.5 mr-3">
+                                        {qty}
+                                      </span>
+                                      <span className="text-sm font-medium text-center">{title}</span>
+                                    </div>
+                                    <div className="p-8 ">
+                                      <img style={{}} src={previewImg} alt="" />
+                                    </div>
+                                    <div>
+                                      <img style={{ width: '100%' }} src={productImg} alt="" className="rounded-xl" />
+                                    </div>
+                                  </div>
+
+                                  {/* Retetar (ascuns) pentru a păstra structura din design */}
+                                  <div className="retetar hidden">
+                                    <div className="relative overflow-x-auto">
+                                      <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+                                        <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                                          <tr>
+                                            <th scope="col" className="px-6 py-3">Nume</th>
+                                            <th scope="col" className="px-6 py-3">cantitate</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {/* Liniile se pot popula când vom primi datele specifice rețetarului */}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </React.Fragment>
+                              );
+                            })}
+                          </section>
+                        </main>
+
+                      </div>
                     </div>
                   </div>
-                </Card>
+
+                  {/* CTA pe mobil: bară fixă jos, doar pentru primul card vizibil */}
+                  {displayedComenzi[0] && displayedComenzi[0].ID === comanda.ID && (
+                    <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden p-3 bg-background/80 border-t border-border">
+                      {comanda.logprolegatorie ? (
+                        (zonaActiva !== 'productie' && zonaActiva !== 'gravare') && (
+                          <Button
+                            className="w-full py-4 rounded-2xl shadow font-medium bg-green-500 hover:bg-green-600"
+                            onClick={() => handleMutaClick(comanda.ID)}
+                            disabled={movingCommandId === comanda.ID}
+                          >
+                            {movingCommandId === comanda.ID ? 'Se procesează...' : 'Muta ➦'}
+                          </Button>
+                        )
+                      ) : (
+                        (zonaActiva === 'legatorie' || zonaActiva === 'dpd' || zonaActiva === 'fan') && (
+                          <Button
+                            className="w-full py-4 rounded-2xl shadow font-medium bg-orange-500 hover:bg-orange-600"
+                            onClick={() => handleIncepeDebitareClick(comanda.ID)}
+                            disabled={startingCommandId === comanda.ID}
+                          >
+                            {startingCommandId === comanda.ID ? 'Se procesează...' : 'Începe procesul →'}
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
       </main>
+
+      {/* Bottom-fixed compact bar: search + dates (desktop and up) */}
+      <div className="hidden md:block fixed bottom-0 right-0 md:left-32 z-40 bg-white border-t border-border">
+        <div className="px-3 py-2 flex items-center gap-3">
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchInventoryData();
+                setShowInventoryModal(true);
+              }}
+            >
+              <Database className="w-4 h-4 mr-1" />
+              Stocuri
+            </Button>
+          </div>
+          <div className="flex-1 max-w-md">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Caută nume sau ID..."
+              className="h-8 px-2 py-1 border rounded-md w-full text-sm bg-white text-foreground border-input placeholder:text-muted-foreground"
+            />
+          </div>
+          <div className="flex-1 overflow-x-auto">
+            <div className="flex items-center gap-1 w-max">
+              {uniqueShippingDates.map((date, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedShippingData(selectedShippingData === date ? null : date)}
+                  className={`px-2 py-1 text-xs rounded-md whitespace-nowrap transition-colors ${
+                    selectedShippingData === date
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-white border border-border hover:bg-gray-50'
+                  }`}
+                >
+                  {date}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Docked Chat cu Grafica */}
       {showChat && (
@@ -1575,38 +1345,52 @@ export const Content = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="grafica">Grafica</SelectItem>
+                  <SelectItem value="debitare">Debitare</SelectItem>
+                  <SelectItem value="gravare">Gravare</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="product">Produs cu probleme</Label>
-              <Select 
-                value={problemProduct} 
-                onValueChange={setProblemProduct}
-                disabled={!currentOrder}
-              >
-                <SelectTrigger id="product">
-                  <SelectValue placeholder="Selectează produsul" />
-                </SelectTrigger>
-                <SelectContent>
-                  {currentOrder?.produse_finale.map((produs, idx) => (
-                    <SelectItem key={idx} value={produs.id_produs}>
-                      {produs.nume}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="product">Produse cu probleme</Label>
+              <div id="product" className="border border-border rounded-md p-2 max-h-48 overflow-auto bg-background/50">
+                {currentOrder?.produse_finale?.length ? (
+                  currentOrder.produse_finale.map((produs, idx) => {
+                    const id = String(produs.id_produs);
+                    const checked = problemProducts.includes(id);
+                    return (
+                      <label key={idx} className="flex items-center gap-2 py-1 text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-blue-600"
+                          checked={checked}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            setProblemProducts((prev) => {
+                              const s = new Set(prev);
+                              if (isChecked) s.add(id); else s.delete(id);
+                              return Array.from(s);
+                            });
+                          }}
+                        />
+                        <span>{produs.nume}</span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <div className="text-xs text-muted-foreground">Nu există produse</div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="department">Departament</Label>
               <Select disabled>
                 <SelectTrigger id="department">
-                  <SelectValue placeholder="Gravare" />
+                  <SelectValue placeholder="Legatorie" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gravare">Gravare</SelectItem>
+                  <SelectItem value="legatorie">Legatorie</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1726,236 +1510,13 @@ export const Content = ({
         </DialogContent>
       </Dialog>
 
-      {/* Studiu modal */}
-      <Dialog open={showStudiuModal} onOpenChange={setShowStudiuModal}>
-        <DialogContent className="fixed right-0 top-0 left-auto h-screen max-h-screen translate-x-0 translate-y-0 rounded-none w-full sm:w-[520px] md:w-[320px] overflow-hidden p-0">
-          {/* Header */}
-          <div className="border-b border-border px-4 py-3 bg-card">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold">Studiu produse</div>
-              <Button variant="ghost" size="sm" onClick={() => setShowStudiuModal(false)} aria-label="Închide">
 
-              </Button>
-            </div>
-          </div>
-          <div className="h-[calc(100vh-52px)] overflow-y-auto px-4 py-4">
-            {isLoadingStudiu ? (
-              <div className="flex justify-center items-center h-40">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {studiuData.length === 0 ? (
-                  <div className="text-sm text-muted-foreground px-2">Nu există elemente de afișat.</div>
-                ) : (
-                  studiuData.map((item, idx) => {
-                    const anexes = [
-                      { key: 'anexa_wenge', label: 'Wenge' },
-                      { key: 'anexa_alb', label: 'Alb' },
-                      { key: 'anexa_natur', label: 'Natur' },
-                      { key: 'anexa_plexi', label: 'Plexi' },
-                      { key: 'anexa_print', label: 'Print' },
-                      { key: 'anexa_gold', label: 'Gold' },
-                      { key: 'anexa_argintiu', label: 'Argintiu' },
-                      { key: 'anexa_plexi_gold', label: 'Plexi Gold' },
-                      { key: 'anexa_plexi_negru', label: 'Plexi Negru' },
-                      { key: 'anexa_plexi_alb', label: 'Plexi Alb' },
-                      { key: 'anexa_plexi_alb_satin', label: 'Plexi Alb Satin' },
-                    ];
-                    const imageUrl = item?.poza_prezentare ? `https://crm.actium.ro/uploads/researchdevelopment/${item.poza_prezentare}` : '';
-                    return (
-                      <Card key={idx} className="p-4">
-                        <div className="flex flex-col gap-2">
-                          <span>{item?.titlu_custom || 'Fără titlu'}</span>
-
-                          {(() => {
-                            if (item?.tip_produs) {
-                              const s = String(item.tip_produs).replace(/-/g, ' ');
-                              return <div className="text-xs text-muted-foreground truncate mb-2 ">{s.charAt(0).toUpperCase() + s.slice(1)}</div>;
-                            }
-                            return <div className="text-xs text-muted-foreground truncate ">-</div>;
-                          })()}
-                          <div className="w-full h-52 bg-muted/30 rounded overflow-hidden flex items-center justify-center">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt={item?.titlu_custom || 'poza prezentare'} className="w-full h-full object-contain" />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Fără imagine</span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                        <div className="">
-                              <div className="truncate">
-                                <div className="text-sm font-semibold truncate gap-2">
-
-                                  <div className="flex items-center gap-1">
-                                    {item?.am_debitat == 1 && (
-                                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted/40" title="Debitat">
-                                        {(item?.am_debitat === true || item?.am_debitat === 1 || item?.am_debitat === '1') ? (
-                                            <Check className="w-3 h-3" />
-                                        ) : (
-                                            <X className="w-3 h-3" />
-                                        )}
-                                          <span>Debitat</span>
-                                      </span>
-                                    )}
-
-                                    {/* Printat: show button when null AND print files exist, icon otherwise */}
-                                    {item?.am_printat == null && item?.grafica_produs_print && Array.isArray(item.grafica_produs_print) && item.grafica_produs_print.length > 0 ? (
-                                      <Button
-                                        size="xs"
-                                        className="h-6 px-2 bg-green-600 hover:bg-green-700 text-white w-full"
-                                        onClick={() => handleMarkStudiuPrintat(item.id)}
-                                        disabled={!!studiuMarkLoading[item.id]}
-                                        title="Marchează ca printat"
-                                      >
-                                        {studiuMarkLoading[item.id] ? '...' : 'Am printat'}
-                                      </Button>
-                                    ) : item?.am_printat != null ? (
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted/40" title="Printat">
-                                        {(item?.am_printat === true || item?.am_printat === 1 || item?.am_printat === '1') ? (
-                                          <Check className="w-3 h-3" />
-                                        ) : (
-                                          <X className="w-3 h-3" />
-                                        )}
-                                        <span>Printat</span>
-                                      </span>
-                                    ) : null}
-
-                                    {/* Gravat: show button when null AND gravare file exists, icon otherwise */}
-                                    {item?.am_gravat == null && item?.grafica_produs_gravare ? (
-                                      <Button
-                                        size="xs"
-                                        className="h-6 px-2 bg-green-600 hover:bg-green-700 text-white"
-                                        onClick={() => handleMarkStudiuGravat(item.id)}
-                                        disabled={!!studiuMarkLoading[item.id]}
-                                        title="Marchează ca gravat"
-                                      >
-                                        {studiuMarkLoading[item.id] ? '...' : 'Am gravat'}
-                                      </Button>
-                                    ) : item?.am_gravat != null ? (
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted/40" title="Gravat">
-                                        {(item?.am_gravat === true || item?.am_gravat === 1 || item?.am_gravat === '1') ? (
-                                          <Check className="w-3 h-3" />
-                                        ) : (
-                                          <X className="w-3 h-3" />
-                                        )}
-                                        <span>Gravat</span>
-                                      </span>
-                                    ) : null}
-
-
-                                  </div>
-
-                                  {/* Produs Fizic: show button only when all three conditions are met */}
-                                  {((item?.am_gravat === true || item?.am_gravat === 1 || item?.am_gravat === '1') ||
-                                          (item?.am_gravat === null && !item?.grafica_produs_gravare)) &&
-                                      (item?.am_printat === true || item?.am_printat === 1 || item?.am_printat === '1') &&
-                                      (item?.am_debitat === true || item?.am_debitat === 1 || item?.am_debitat === '1') && (
-                                          <Button
-                                              size="xs"
-                                              className="h-6 px-2  bg-blue-600 hover:bg-blue-700 text-white w-full mt-2"
-                                              onClick={() => handleMarkStudiuProdusFizic(item.id)}
-                                              disabled={!!studiuMarkLoading[item.id]}
-                                              title="Marchează ca produs fizic realizat"
-                                          >
-                                            {studiuMarkLoading[item.id] ? '...' : 'Am realizat produsul fizic'}
-                                          </Button>
-                                      )}
-                                </div>
-
-                              </div>
-                            </div>
-                            <div className="mt-3 overflow-x-auto">
-                              <div className="mt-4">
-                                <div className="text-sm font-medium mb-2">Fișiere disponibile:</div>
-                                <div className=" gap-2">
-                                {/* Display download links for print files */}
-                                {item?.grafica_produs_print && Array.isArray(item.grafica_produs_print) && item.grafica_produs_print.length > 0 && 
-                                  item.grafica_produs_print.map((file, i) => (
-                                    <a
-                                      key={i}
-                                      href={`https://crm.actium.ro/uploads/researchdevelopment/${file}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      download
-                                      className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
-                                      title={`Download print: ${file}`}
-                                    >
-                                      <Download className="w-4 h-4" />
-                                      <span>Download print</span>
-                                    </a>
-                                  ))
-                                }
-
-                                {/* Display download link for gravare file */}
-                                {item?.grafica_produs_gravare && (
-                                  <a
-                                    href={`https://crm.actium.ro/uploads/researchdevelopment/${item.grafica_produs_gravare}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download
-                                    className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
-                                    title={`Download gravare: ${item.grafica_produs_gravare}`}
-                                  >
-                                    <Download className="w-4 h-4" />
-                                    <span>Download gravare</span>
-                                  </a>
-                                )}
-
-                                {/* Display download link for template AI file */}
-                                {/*{item?.template_ai && (*/}
-                                {/*  <a*/}
-                                {/*    href={`https://crm.actium.ro/uploads/researchdevelopment/${item.template_ai}`}*/}
-                                {/*    target="_blank"*/}
-                                {/*    rel="noopener noreferrer"*/}
-                                {/*    download*/}
-                                {/*    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 transition-colors"*/}
-                                {/*    title={`Download template: ${item.template_ai}`}*/}
-                                {/*  >*/}
-                                {/*    <Download className="w-4 h-4" />*/}
-                                {/*    <span>Download template</span>*/}
-                                {/*  </a>*/}
-                                {/*)}*/}
-
-                                {/* Display download link for grafica produs editabil */}
-                                {/*{item?.grafica_produs_editabil && (*/}
-                                {/*  <a*/}
-                                {/*    href={`https://crm.actium.ro/uploads/researchdevelopment/${item.grafica_produs_editabil}`}*/}
-                                {/*    target="_blank"*/}
-                                {/*    rel="noopener noreferrer"*/}
-                                {/*    download*/}
-                                {/*    className="flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 transition-colors"*/}
-                                {/*    title={`Download grafică editabilă: ${item.grafica_produs_editabil}`}*/}
-                                {/*  >*/}
-                                {/*    <Download className="w-4 h-4" />*/}
-                                {/*    <span>Download grafică editabilă</span>*/}
-                                {/*  </a>*/}
-                                {/*)}*/}
-                                </div>
-
-                                {/* Show message if no files are available */}
-                                {!item?.grafica_produs_print && !item?.grafica_produs_gravare && !item?.template_ai && !item?.grafica_produs_editabil && (
-                                  <div className="text-sm text-muted-foreground">Nu există fișiere disponibile pentru descărcare.</div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Inventory modal */}
       <Dialog open={showInventoryModal} onOpenChange={setShowInventoryModal}>
         <DialogContent className="sm:max-w-5xl fixed  left-1/2 transform  rounded-t-xl rounded-b-none max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Stocuri Sistem Gravare</DialogTitle>
+            <DialogTitle>Stocuri Sistem Legatorie</DialogTitle>
           </DialogHeader>
           <div className="py-4 flex-grow overflow-hidden">
             {isLoadingInventory ? (

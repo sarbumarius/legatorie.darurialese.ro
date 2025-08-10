@@ -620,35 +620,6 @@ export const Header = ({
             )}
           </div>
 
-          {/* Orders per row selector (desktop) */}
-          <div className="hidden md:flex items-center gap-1 mr-1">
-            {/*<span className="text-xs text-gray-300">Comenzi:</span>*/}
-            <Select
-              value={String(orderCols)}
-              onValueChange={(val) => {
-                const num = parseInt(val, 10);
-                const valid = num === 2 || num === 3 || num === 4 ? num : 3;
-                setOrderCols(valid);
-                try {
-                  localStorage.setItem('desktopOrderCols', String(valid));
-                } catch (e) {}
-                // Notify listeners (Content) to update immediately
-                try {
-                  // @ts-ignore - Custom event for cross-component notification
-                  window.dispatchEvent(new CustomEvent('order-cols-change', { detail: valid }));
-                } catch (e) {}
-              }}
-            >
-              <SelectTrigger className="h-7 w-[120px] px-2 text-xs">
-                <SelectValue placeholder="3 comenzi" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2">2 comenzi</SelectItem>
-                <SelectItem value="3">3 comenzi</SelectItem>
-                <SelectItem value="4">4 comenzi</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Theme toggles - button group */}
           <div className="hidden md:inline-flex rounded-md overflow-hidden border border-border">

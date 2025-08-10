@@ -65,7 +65,7 @@ export const Login = ({ onLogin }: LoginProps) => {
               className="h-16"
             />
           </div>
-          <CardTitle className="text-2xl font-bold text-center">Dashboard Producție</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Dashboard Legătorie</CardTitle>
           <CardDescription className="text-center">
             Introduceți datele de autentificare pentru a accesa dashboard-ul
           </CardDescription>
@@ -110,7 +110,7 @@ export const Login = ({ onLogin }: LoginProps) => {
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Dashboard Gravare v1.0
+            © {new Date().getFullYear()} Dashboard Legătorie v1.0
           </p>
         </CardFooter>
       </Card>
