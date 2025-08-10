@@ -480,7 +480,7 @@ export const Content = ({
   const [moveForOrderId, setMoveForOrderId] = useState<number | null>(null);
   type MoveStep = 'idle' | 'factura-start' | 'factura-done' | 'bon-start' | 'bon-done' | 'muta-start' | 'muta-done' | 'error';
   const [moveStep, setMoveStep] = useState<MoveStep>('idle');
-  const [moveInfo, setMoveInfo] = useState<{ serie?: string; numar?: number; bonId?: string; error?: string }>({});
+  const [moveInfo, setMoveInfo] = useState<{ serie?: string; numar?: number; facturaError?: string; bonId?: string; bonError?: string; error?: string }>({});
 
   // Function to handle "Muta" button click
   const handleMutaClick = async (comandaId: number) => {
@@ -491,25 +491,49 @@ export const Content = ({
       setShowMoveModal(true);
 
       // 1) Generate invoice (real API)
-      const invRes: any = await generateFactura(comandaId);
-      if (!invRes?.ok) {
-        throw new Error(invRes?.message || 'Eroare la generarea facturii');
+      try {
+        const invRes: any = await generateFactura(comandaId);
+        if (!invRes?.ok) {
+          throw new Error(invRes?.message || 'Eroare la generarea facturii');
+        }
+        const invData: any = invRes?.invoice_data || {};
+        setMoveInfo({
+          serie: invData?.serie ?? invData?.series ?? '—',
+          numar: invData?.numar ?? invData?.number ?? undefined,
+        });
+      } catch (e: any) {
+        // If order is refăcută, record the error but continue to next step
+        const ord = comenzi.find((c) => c.ID === comandaId);
+        const rf: any = (ord as any)?.refacut;
+        const isRefacut = rf === '1' || rf === 1 || rf === true;
+        if (isRefacut) {
+          setMoveInfo((prev) => ({ ...prev, facturaError: e?.message || 'Eroare la generarea facturii' }));
+        } else {
+          throw e;
+        }
       }
-      const invData: any = invRes?.invoice_data || {};
-      setMoveInfo({
-        serie: invData?.serie ?? invData?.series ?? '—',
-        numar: invData?.numar ?? invData?.number ?? undefined,
-      });
       setMoveStep('factura-done');
 
       // 2) Generate receipt (real API)
       setMoveStep('bon-start');
-      const bonRes: any = await generateBon(comandaId);
-      if (!bonRes?.ok) {
-        throw new Error(bonRes?.message || 'Eroare la generarea bonului');
+      try {
+        const bonRes: any = await generateBon(comandaId);
+        if (!bonRes?.ok) {
+          throw new Error(bonRes?.message || 'Eroare la generarea bonului');
+        }
+        const receiptPath: string | undefined = bonRes?.receipt_path;
+        setMoveInfo((prev) => ({ ...prev, bonId: receiptPath || 'bon' }));
+      } catch (e: any) {
+        // If order is refăcută, record the error but continue to next step
+        const ord = comenzi.find((c) => c.ID === comandaId);
+        const rf: any = (ord as any)?.refacut;
+        const isRefacut = rf === '1' || rf === 1 || rf === true;
+        if (isRefacut) {
+          setMoveInfo((prev) => ({ ...prev, bonError: e?.message || 'Eroare la generarea bonului' }));
+        } else {
+          throw e;
+        }
       }
-      const receiptPath: string | undefined = bonRes?.receipt_path;
-      setMoveInfo((prev) => ({ ...prev, bonId: receiptPath || 'bon' }));
       setMoveStep('bon-done');
 
       // 3) Move order (real API)
@@ -1043,6 +1067,14 @@ export const Content = ({
                                           >
                                               #{comanda.ID}
                                           </a>
+                                          <br></br>
+
+                                        {comanda.shipping_details.nume_firma && (
+                                            <span className="text-sm text-muted-foreground">
+                                                {comanda.shipping_details.nume_firma}{" "}
+                                                {comanda.shipping_details.cui_firnma && `(${comanda.shipping_details.cui_firnma})`}
+                                            </span>
+                                        )}
                                       </h3>
                                   </div>
                                   <div className="flex flex-col items-end space-y-1 bg-white p-1 rounded-3xl">
@@ -1876,9 +1908,13 @@ export const Content = ({
               </div>
               <div>
                 {moveStep === 'factura-done' || moveStep === 'bon-start' || moveStep === 'bon-done' || moveStep === 'muta-start' || moveStep === 'muta-done' ? (
-                  <div>
-                    Factura generată: <span className="font-semibold">{moveInfo.serie || 'PG'} {moveInfo.numar ?? 203}</span>
-                  </div>
+                  moveInfo.facturaError ? (
+                    <div className="text-amber-600">Eroare la generarea facturii: <span className="font-semibold">{moveInfo.facturaError}</span>. Comandă refăcută — se continuă fără factură.</div>
+                  ) : (
+                    <div>
+                      Factura generată: <span className="font-semibold">{moveInfo.serie || 'PG'} {moveInfo.numar ?? 203}</span>
+                    </div>
+                  )
                 ) : (
                   <div>Se generează factura...</div>
                 )}
@@ -1897,7 +1933,11 @@ export const Content = ({
               </div>
               <div>
                 {moveStep === 'bon-done' || moveStep === 'muta-start' || moveStep === 'muta-done' ? (
-                  <div>Bon emis (<span className="font-semibold">{moveInfo.bonId || 'BON-PG-203'}</span>) și trimis la printat</div>
+                  moveInfo.bonError ? (
+                    <div className="text-amber-600">Eroare la generarea bonului: <span className="font-semibold">{moveInfo.bonError}</span>. Comandă refăcută — se continuă fără bon.</div>
+                  ) : (
+                    <div>Bon emis (<span className="font-semibold">{moveInfo.bonId || 'BON-PG-203'}</span>) și trimis la printat</div>
+                  )
                 ) : moveStep === 'bon-start' ? (
                   <div>Se generează bon factura...</div>
                 ) : (
