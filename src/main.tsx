@@ -9,6 +9,6 @@ link.href = 'https://darurialese.com/wp-content/uploads/2020/03/cropped-favicon-
 document.head.appendChild(link);
 
 // Setare titlu document
-document.title = 'Dashboard Gravare - Daruri Alese';
+document.title = 'Legatorie - Daruri Alese';
 
 createRoot(document.getElementById("root")!).render(<App />);

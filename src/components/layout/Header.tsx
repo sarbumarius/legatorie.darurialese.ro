@@ -735,7 +735,7 @@ export const Header = ({
       </Dialog>
 
       <Dialog open={showWorkHistoryModal} onOpenChange={setShowWorkHistoryModal}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Istoric pontaj luna curentă</DialogTitle>
             <DialogDescription>Activitatea înregistrată în luna curentă pentru {user.name}</DialogDescription>
@@ -816,7 +816,7 @@ export const Header = ({
                               <span className="font-medium">{effectiveHours}</span>
                             </div>
                             <Badge variant="outline" className="px-2">
-                              {group.items.length} înregistrări
+                              {group.items.length} {group.items.length === 1 ? 'înregistrare' : 'înregistrări'}
                             </Badge>
                           </div>
                         </div>
@@ -884,120 +884,108 @@ export const Header = ({
       <Dialog open={showROIModal} onOpenChange={setShowROIModal}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Regulament de Ordine Interioară – Departamentul de Gravare (CO2 & Metal)</DialogTitle>
-            <DialogDescription>Regulile și procedurile specifice pentru activitatea de gravare cu laser CO2 și laser pentru metale (fiber/galvo)</DialogDescription>
+            <DialogTitle>Regulament de Ordine Interioară – Departamentul de Legătorie</DialogTitle>
+            <DialogDescription>Reguli și proceduri pentru activitatea din Legătorie: închidere produse, verificări, calitate, flux și SSM</DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-2">1. Program de lucru & Pontaj</h3>
                 <p className="text-sm text-muted-foreground">
-                  Programul standard este de Luni – Vineri, între orele 08:00 – 17:00.
+                  Programul standard este de Luni – Vineri, între orele 08:00 – 16:30 (8 ore de lucru + 30 min pauză de masă).
                 </p>
                 <ul className="list-disc pl-5 mt-2 text-sm text-muted-foreground">
                   <li>Pauza de masă este stabilită între 12:30 – 13:00 și se respectă întocmai.</li>
                   <li>Prezența este înregistrată prin aplicația de pontaj electronic, disponibilă pe dispozitive mobile sau desktop.</li>
                   <li>Pontajul este obligatoriu la începutul și sfârșitul programului.</li>
-                  <li>Echipamentele de gravare pot fi pornite doar dacă pontajul este activ (integrare aplicație utilaje).</li>
+                  <li>Activitățile din Legătorie se efectuează doar cu pontaj activ și respectând instrucțiunile interne.</li>
                   <li>Lipsa pontajului echivalează cu absență nemotivată.</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">2. Sarcini & responsabilități</h3>
+                <h3 className="text-lg font-semibold mb-2">2. Sarcini & responsabilități – Legătorie</h3>
                 <ul className="list-disc pl-5 mt-2 text-sm text-muted-foreground">
-                  <li>Operarea gravatoarelor CO2 și laser pentru metale (fiber/galvo) conform comenzilor.</li>
-                  <li>Pregătirea fișierelor conform specificațiilor din Aplicația Cloud – Gravare Daruri Alese.</li>
-                  <li>Respectarea ordinii de execuție și a termenelor asumate.</li>
-                  <li>Verificarea materialelor, focusului, parametrilor (putere, viteză, frecvență/puls, treceri, air assist) înainte de rulare.</li>
-                  <li>Marcarea comenzilor ca finalizate în aplicație și atașarea fotografiilor/rapoartelor, dacă se solicită.</li>
+                  <li>Închiderea produselor (asamblare finală).</li>
+                  <li>Lipit elementele de lemn între ele.</li>
+                  <li>Lipit fotografiile.</li>
+                  <li>Montat baza LED la produs, unde este cazul.</li>
+                  <li>Introducere boxă în colet, unde este cazul.</li>
+                  <li>Verificare elemente anexă ale produsului și includere în colet.</li>
+                  <li>Verificare corectitudine produse (calitate și conformitate).</li>
+                  <li>Anunțat problemele întâlnite (folosește „Raportează problemă”).</li>
+                  <li>Ținerea gestiunii stocurilor pentru zona de Legătorie.</li>
+                  <li>Menținerea legăturii cu zona de împachetare.</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">3. Mentenanță & întreținere</h3>
+                <h3 className="text-lg font-semibold mb-2">3. Mentenanță & întreținere – Legătorie</h3>
                 <p className="text-sm text-muted-foreground">
-                  Curățenie zilnică la începutul și sfârșitul turei (masă de lucru, zonă încărcare/descărcare, spațiu comun).
+                  Curățenie zilnică la începutul și sfârșitul turei (mese de lucru, spațiu de lipire, zonă de ambalare, spațiu comun).
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Întreținere periodică a echipamentelor:
+                  Întreținere periodică a uneltelor și spațiului:
                 </p>
                 <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
-                  <li>CO2: curățare oglinzi/lentilă, verificare aliniere, air assist, chiller/temperatură; curățare tăvi/grătare de resturi; verificare ventilator/extractor.</li>
-                  <li>Fiber/galvo (metale): verificare focalizare, colimație/scan head, integritatea fereastrei de protecție, funcționare exhaust.</li>
-                  <li>Evidență în Registrul de Mentenanță (data, operația, persoana).</li>
+                  <li>Verificare pistol de lipit, stick-uri adezive/benzi, prelungitoare, iluminare.</li>
+                  <li>Depozitare corectă a materialelor/anexelor; zonă separată pentru produse finalizate vs. în lucru.</li>
+                  <li>Evidență simplă a intervențiilor și consumabilelor folosite.</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Raportare imediată a oricărei defecțiuni/comportament anormal către responsabilul tehnic; oprire utilaj dacă există risc.
+                  Raportare imediată a oricăror probleme/defecțiuni și oprirea activității când există risc.
                 </p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">4. Flux digital de lucru</h3>
+                <h3 className="text-lg font-semibold mb-2">4. Flux de lucru & verificări</h3>
                 <p className="text-sm text-muted-foreground">
-                  Comenzile se gestionează prin:
+                  Comenzile se gestionează prin aplicația internă (vizualizare, status, atașamente) și, unde este cazul, Google Drive (fișiere sursă/șabloane).
                 </p>
-                <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
-                  <li>Aplicația Cloud – Gravare Daruri Alese (vizualizare, status, atașamente).</li>
-                  <li>Google Drive de producție (fișiere sursă, șabloane, documente tehnice).</li>
-                </ul>
                 <p className="text-sm text-muted-foreground mt-2">
                   Interzis: modificarea/redenumirea/ștergerea fișierelor fără aprobare.
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Naming standard fișiere: [ID Comandă]_[Client]_[Material]_[Versiune].
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Preflight obligatoriu înainte de gravare:
+                  Verificări înainte de închidere/expediere:
                 </p>
                 <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
-                  <li>Formate acceptate (ex.: PDF/X, AI, SVG, DXF), fonturi convertite în curbe, rezoluții potrivite pentru raster.</li>
-                  <li>Validarea dimensiunilor și a poziționării în șablon.</li>
-                  <li>Test pe eșantion/referință unde este cazul (metale/acoperiri noi).</li>
+                  <li>Elemente anexă complete și potrivite (bază LED, boxă, accesorii).</li>
+                  <li>Curățenie produs; lipiri curate; poziționări corecte; personalizare conformă.</li>
+                  <li>Ambalare conform standardului (protecție, etichetare, documente).</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">5. Materiale, consumabile & interdicții</h3>
+                <h3 className="text-lg font-semibold mb-2">5. Materiale, consumabile & interdicții – Legătorie</h3>
                 <p className="text-sm text-muted-foreground">
-                  Materiale uzuale:
+                  Materiale/consumabile uzuale:
                 </p>
                 <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
-                  <li>lemn, PFL, MDF, plexiglas/acrilic, piele, sticlă (CO2)</li>
-                  <li>inox, oțel, aluminiu eloxat, alamă, cupru (fiber/galvo)</li>
-                  <li>materiale acoperite (lac/pulberi), etichete tehnice</li>
+                  <li>lemn, MDF, plexiglas/acrilic, fotografii tipărite, baze LED, boxe/accesorii.</li>
+                  <li>consumabile: adezivi (batoane/pistoale), benzi dublu-adezive, alcool izopropilic, lavete fără scame, protecții, mănuși.</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Consumabile: bandă termică, compuși de marcare (unde e cazul), alcool izopropilic, lavete fără scame, măști de protecție a suprafeței, mănuși.
+                  Interzis: folosirea materialelor murdare/umede, adezivi nepotriviți, ambalare fără protecție corespunzătoare.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Materiale strict interzise la CO2 (toxice/riscuri): PVC/vinil clorurat, policarbonat gros, ABS, fibră de carbon cu rășini, materiale necunoscute fără fișă tehnică. Lista completă se afișează lângă utilaj.
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Materiale aduse de client: necesită aprobare și, la nevoie, test în prealabil; clientul confirmă asumarea riscurilor asupra aspectului final.
+                  Materiale aduse de client: necesită aprobare; se notează particularitățile pentru trasabilitate.
                 </p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">6. Sănătate & Securitate în muncă (SSM)</h3>
+                <h3 className="text-lg font-semibold mb-2">6. Sănătate & Securitate în muncă (SSM) – Legătorie</h3>
                 <p className="text-sm text-muted-foreground">
-                  Echipament individual de protecție (EIP) obligatoriu:
+                  EIP recomandat/obligatoriu în funcție de sarcină:
                 </p>
                 <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
-                  <li>ochelari certificați pentru lungimea de undă a utilajului folosit (CO2 ~10.6 μm; fiber ~1064 nm)</li>
-                  <li>mănuși, mască/respirator unde impune fișa materialului</li>
+                  <li>mănuși de protecție la lipire/ambalare; ochelari unde există risc de așchii.</li>
+                  <li>atenție la arsuri (pistol de lipit) și tăieturi (cutter). Nu lăsați pistolul de lipit nesupravegheat.</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Nu se lasă utilajul nesupravegheat în timpul gravării.
+                  Păstrează zona de lucru liberă de materiale inflamabile; cunoaște amplasarea stingătorului și procedura de urgență.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ține air assist activ (unde e aplicabil), îndepărtează materiale inflamabile din zona de lucru.
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Păstrează la îndemână stingător (ABC/CO2) și cunoaște oprirea de urgență.
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Interzis consumul de alcool/substanțe interzise; interzis telefonul în timpul operării (exceptând urgențe).
+                  Interzis consumul de alcool/substanțe interzise în timpul programului.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
                   Respectă protocolul de evacuare și instrucțiunile SSM/PSI afișate.
@@ -1040,7 +1028,7 @@ export const Header = ({
                   Evaluări periodice pe baza:
                 </p>
                 <ul className="list-disc pl-5 mt-1 text-sm text-muted-foreground">
-                  <li>calității gravărilor;</li>
+                  <li>calității lucrărilor de legătorie;</li>
                   <li>respectării termenelor;</li>
                   <li>curățeniei și stării echipamentelor;</li>
                   <li>respectării SSM/PSI;</li>

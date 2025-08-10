@@ -1,11 +1,5 @@
 // src/types/OrderApi.ts
 export interface OrderApiResponse {
-    // new optional gift product in order
-    produs_cadou_nou?: {
-        personalizare_cadou_comanda?: string;
-        fisier_productie_cadou?: string;
-        produs_cadou_nou?: string;
-    };
     ID: number;
     shipping_details: {
         _shipping_first_name: string;
@@ -26,8 +20,6 @@ export interface OrderApiResponse {
     download_fisiere_grafica: any[];
     previzualizare_galerie: (string | null)[];
     anexe_diferite_comanda: { anexe_diferite_comanda: string };
-    atentie_pix?: number | string | boolean;
-    atentie_licheni?: { licheni_diferiti?: string | number | boolean } | string | number | boolean | null;
     refacut: number;
     motiv_refacut: string;
     gravare: boolean;

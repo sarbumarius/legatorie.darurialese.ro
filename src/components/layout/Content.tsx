@@ -9,6 +9,96 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Comanda, Produs, StatItem } from "@/types/dashboard";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { generateFactura, generateBon, mutaLegatorie } from "@/api/orders";
+import { Progress } from "@/components/ui/progress";
+
+// Hint component showing incoming counts from other zones when current zone is empty
+const API_BASE_HINT = 'https://crm.actium.ro';
+const COMENZI_API_HINT_URL = `${API_BASE_HINT}/api/comenzi-daruri-alese-legatorie`;
+
+function IncomingHint({ zonaActiva }: { zonaActiva: string }) {
+  const [loading, setLoading] = useState(false);
+  const [counts, setCounts] = useState<{ gravare: number; debitare: number } | null>(null);
+
+  useEffect(() => {
+    const zonesToWatch = ['legatorie', 'dpd', 'fan'];
+    if (!zonesToWatch.includes((zonaActiva || '').toLowerCase())) return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const headers: Record<string, string> = {
+          'Accept': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        };
+        const [gRes, dRes] = await Promise.all([
+          fetch(`${COMENZI_API_HINT_URL}/gravare`, { headers }).catch(() => null),
+          fetch(`${COMENZI_API_HINT_URL}/debitare`, { headers }).catch(() => null),
+        ]);
+        const gJson = gRes && gRes.ok ? await gRes.json().catch(() => []) : [];
+        const dJson = dRes && dRes.ok ? await dRes.json().catch(() => []) : [];
+        if (!cancelled) {
+          setCounts({
+            gravare: Array.isArray(gJson) ? gJson.length : 0,
+            debitare: Array.isArray(dJson) ? dJson.length : 0,
+          });
+        }
+      } catch (e) {
+        if (!cancelled) setCounts({ gravare: 0, debitare: 0 });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+
+    return () => { cancelled = true; };
+  }, [zonaActiva]);
+
+  const zonesToWatch = ['legatorie', 'dpd', 'fan'];
+  if (!zonesToWatch.includes((zonaActiva || '').toLowerCase())) return null;
+
+  if (loading) {
+    return (
+      <div className="mt-2 text-xs text-muted-foreground flex items-center justify-center gap-2">
+        <span className="inline-block w-3 h-3 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin" />
+        Se verifică comenzile ce urmează din alte zone...
+      </div>
+    );
+  }
+
+  if (counts) {
+    return (
+      <div className="mt-3">
+        <div className="text-sm text-muted-foreground mb-2">
+          Fii pe fază, urmează <span className="font-semibold text-foreground">{counts.gravare}</span> din gravare și <span className="font-semibold text-foreground">{counts.debitare}</span> din debitare.
+        </div>
+        <div className="flex items-center justify-center">
+          <div className="inline-flex items-center gap-6">
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center text-base font-bold shadow">
+                {counts.gravare}
+              </div>
+              <div className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Gravare</div>
+            </div>
+            <div className="relative w-20 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-primary to-green-600 animate-pulse opacity-70"></div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center text-base font-bold shadow">
+                {counts.debitare}
+              </div>
+              <div className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Debitare</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 interface ContentProps {
   statsData: StatItem[];
@@ -131,6 +221,7 @@ export const Content = ({
 
     // Per-order selected preview index for large preview area
     const [previewIndexByOrder, setPreviewIndexByOrder] = useState<Record<number, number>>({});
+
     const getSelectedPreviewIndex = (orderId: number, total: number) => {
       const idx = previewIndexByOrder[orderId];
       if (typeof idx === 'number' && idx >= 0 && idx < total) return idx;
@@ -372,39 +463,70 @@ export const Content = ({
     setShowProblemModal(false);
   };
 
+  // Fake API helpers for the move workflow (invoice -> receipt -> move)
+  const fakeApiDelay = (ms: number) => new Promise((res) => setTimeout(res, ms));
+  const fakeGenFactura = async () => {
+    await fakeApiDelay(1000);
+    // return fake invoice details
+    return { serie: 'PG', numar: 203 };
+  };
+  const fakeGenBon = async () => {
+    await fakeApiDelay(900);
+    return { id: 'BON-PG-203', status: 'emis' };
+  };
+
+  // Modal state for "Muta" progress
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveForOrderId, setMoveForOrderId] = useState<number | null>(null);
+  type MoveStep = 'idle' | 'factura-start' | 'factura-done' | 'bon-start' | 'bon-done' | 'muta-start' | 'muta-done' | 'error';
+  const [moveStep, setMoveStep] = useState<MoveStep>('idle');
+  const [moveInfo, setMoveInfo] = useState<{ serie?: string; numar?: number; bonId?: string; error?: string }>({});
+
   // Function to handle "Muta" button click
   const handleMutaClick = async (comandaId: number) => {
     try {
-      // Set the moving command ID to show loading state
       setMovingCommandId(comandaId);
+      setMoveForOrderId(comandaId);
+      setMoveStep('factura-start');
+      setShowMoveModal(true);
 
-      const response = await fetch(`https://crm.actium.ro/api/muta-legatorie/${comandaId}/${userId}`, {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'accept': 'application/json',
-        }
-      });
-
-      // Parse the response
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Eroare la mutarea comenzii');
+      // 1) Generate invoice (real API)
+      const invRes: any = await generateFactura(comandaId);
+      if (!invRes?.ok) {
+        throw new Error(invRes?.message || 'Eroare la generarea facturii');
       }
+      const invData: any = invRes?.invoice_data || {};
+      setMoveInfo({
+        serie: invData?.serie ?? invData?.series ?? '—',
+        numar: invData?.numar ?? invData?.number ?? undefined,
+      });
+      setMoveStep('factura-done');
 
-      // Handle successful response
-      console.log('Comanda mutată cu succes:', data);
+      // 2) Generate receipt (real API)
+      setMoveStep('bon-start');
+      const bonRes: any = await generateBon(comandaId);
+      if (!bonRes?.ok) {
+        throw new Error(bonRes?.message || 'Eroare la generarea bonului');
+      }
+      const receiptPath: string | undefined = bonRes?.receipt_path;
+      setMoveInfo((prev) => ({ ...prev, bonId: receiptPath || 'bon' }));
+      setMoveStep('bon-done');
 
-      // Refresh the data to reflect the changes
-      //refreshComenzi();
+      // 3) Move order (real API)
+      setMoveStep('muta-start');
+      await mutaLegatorie(comandaId, userId);
 
-    } catch (error) {
-      console.error('Eroare la mutarea comenzii:', error);
-      alert('A apărut o eroare la mutarea comenzii. Vă rugăm să încercați din nou.');
+      setMoveStep('muta-done');
+      // Refresh orders list to reflect the move
+      try { refreshComenzi(); } catch (_) {}
+      // Close after a short delay to let user see the checks
+      setTimeout(() => setShowMoveModal(false), 800);
+    } catch (error: any) {
+      console.error('Eroare la fluxul de mutare:', error);
+      setMoveStep('error');
+      setMoveInfo((prev) => ({ ...prev, error: error?.message || 'Eroare necunoscută' }));
     } finally {
-      // Clear the moving command ID regardless of success or failure
-      //setMovingCommandId(null);
+      setMovingCommandId(null);
     }
   };
 
@@ -483,7 +605,7 @@ export const Content = ({
   return (
     <>
       <main className={`${showChat ? 'pr-[15vw]' : ''} ml-32 mt-20 flex-1 backgroundculiniute pb-16`}>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2  relative p-3 border border-b-1 border-border bg-white dark:bg-[#020817]  ">
+        <div className="sticky top-20 z-30 grid grid-cols-1 sm:grid-cols-5 gap-2 relative p-3 border border-b border-border bg-card">
           {/* Mobile toggle button for expanding/collapsing statuses */}
           <div className="sm:hidden w-full mb-2 flex justify-center -mt-8">
             <Button 
@@ -579,8 +701,9 @@ export const Content = ({
           {/*</div>*/}
         </div>
 
-        {/* Panou global anexe produs - ascuns conform cerinței */}
-        {false && expandedProdPanel && (() => {
+
+        {/* Panou anexe produs - vizibil când este selectat un produs */}
+        {expandedProdPanel && (() => {
           const selOrder = comenzi.find((c) => c.ID === expandedProdPanel.orderId);
           const prod = selOrder?.produse_finale?.[expandedProdPanel.productIndex];
           if (!selOrder || !prod) return null;
@@ -829,23 +952,49 @@ export const Content = ({
           </div>
         )}
 
-        <div className="space-y-4 mx-3">
+        <div className="space-y-4 mx-3 ">
           {comenzi.length === 0 && !isLoadingComenzi && (
-            <Card className="p-8 text-center">
-              <ShoppingCart className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Nu există comenzi pentru zona selectată</p>
+            <Card className="p-10 text-center max-w-md mx-auto mt-24">
+              <div className="mx-auto mb-6 h-24 w-24 text-muted-foreground">
+                <svg viewBox="0 0 100 100" className="h-24 w-24">
+                  <g className="animate-spin" style={{ transformOrigin: '50% 50%' }}>
+                    <circle cx="50" cy="50" r="42" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="6 6" className="opacity-30" />
+                  </g>
+                  <g className="animate-bounce">
+                    <rect x="32" y="34" width="36" height="28" rx="4" ry="4" fill="currentColor" className="opacity-60" />
+                    <path d="M32 42 L50 32 L68 42" fill="currentColor" className="opacity-80" />
+                  </g>
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-1">Nu există comenzi pentru zona selectată</h3>
+              <p className="text-base text-muted-foreground">Verifică mai târziu — te anunțăm ce urmează.</p>
+              {/* Incoming from other zones hint */}
+              <div className="mt-3">
+                <IncomingHint zonaActiva={zonaActiva} />
+              </div>
             </Card>
           )}
 
           {comenzi.length > 0 && displayedComenzi.length === 0 && (
-            <Card className="p-8 text-center">
-              <ShoppingCart className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">
+            <Card className="p-10 text-center max-w-md mx-auto">
+              <div className="mx-auto mb-6 h-24 w-24 text-muted-foreground">
+                <svg viewBox="0 0 100 100" className="h-24 w-24">
+                  <g className="animate-spin" style={{ transformOrigin: '50% 50%' }}>
+                    <circle cx="50" cy="50" r="42" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="6 6" className="opacity-30" />
+                  </g>
+                  <g className="animate-bounce">
+                    <rect x="32" y="34" width="36" height="28" rx="4" ry="4" fill="currentColor" className="opacity-60" />
+                    <path d="M32 42 L50 32 L68 42" fill="currentColor" className="opacity-80" />
+                  </g>
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-1">Nu s-au găsit comenzi potrivite filtrului</h3>
+              <p className="text-base text-muted-foreground">
                 {selectedProductId && selectedShippingData 
-                  ? "Nu există comenzi cu produsul selectat și data de expediere selectată" 
+                  ? "Nu există comenzi cu produsul și data selectate. Modifică filtrul și încearcă din nou." 
                   : selectedShippingData 
-                    ? "Nu există comenzi cu data de expediere selectată" 
-                    : "Nu există comenzi cu produsul selectat"}
+                    ? "Nu există comenzi cu data de expediere selectată. Modifică filtrul și încearcă din nou." 
+                    : "Nu există comenzi cu produsul selectat. Modifică filtrul și încearcă din nou."}
               </p>
             </Card>
           )}
@@ -881,7 +1030,7 @@ export const Content = ({
                     <div className=" mx-auto px-2">
                       <header className="mb-6" />
                       <div className="grid grid-cols-4 gap-6">
-                          <aside className="col-span-1  md:sticky md:top-24 xl:top-24 h-fit self-start">
+                          <aside className="col-span-1  md:sticky md:top-[168px]  h-fit self-start">
                               <div className="flex items-center justify-between mb-3">
                                   <div>
                                       <h3 className="text-lg font-semibold text-foreground">
@@ -988,7 +1137,7 @@ export const Content = ({
                               })()}
 
                               {/* Grid info */}
-                              <section className="grid grid-cols-2 gap-4 text-xs bg-white border border-border border-b-0  p-2 rounded-t-lg mt-2">
+                              <section className="grid grid-cols-2 gap-4 text-xs bg-card border border-border border-b-0  p-2 rounded-t-lg mt-2">
                                   <div className="flex flex-col">
                                       <span className="text-muted-foreground">Expediere</span>
                                       <span className="font-semibold">
@@ -1005,7 +1154,7 @@ export const Content = ({
                               </section>
 
                               {/* Gravare/Printare (stânga) + Acțiuni (dreapta) */}
-                              <section className="flex items-center justify-between gap-4 bg-white border border-border rounded-b-lg p-2 mb-2">
+                              <section className="flex items-center justify-between gap-4 bg-card border border-border rounded-b-lg p-2 mb-2">
                                   <div className="flex items-center gap-4">
                                       <div className="flex items-center gap-2">
                                           <span className="text-xs text-muted-foreground">Gravare</span>
@@ -1059,9 +1208,9 @@ export const Content = ({
                                   const imgUrl = slug ? `https://darurialese.com/wp-content/themes/woodmart-child/img/cadouri-comanda/${slug}.png` : '';
                                   if (!imgUrl && !personal) return null;
                                   return (
-                                      <section className="flex items-center gap-3 bg-white border border-border rounded-md p-2 mb-2">
+                                      <section className="flex items-center gap-3 bg-card border border-border rounded-md p-2 mb-2">
                                           {imgUrl ? (
-                                              <img src={imgUrl} alt="Cadou din comandă" className="w-14 h-14 rounded-md border object-contain bg-white" />
+                                              <img src={imgUrl} alt="Cadou din comandă" className="w-14 h-14 rounded-md border object-contain bg-background" />
                                           ) : null}
                                           {personal ? (
                                               <div className="text-xs leading-tight">
@@ -1104,7 +1253,7 @@ export const Content = ({
 
                           {/* Produse în format 2 coloane (preview stânga, produs dreapta) */}
                           <section className={`space-y-4 bg-white border ${((comanda as any)?.refacut === '1' || (comanda as any)?.refacut === 1 || (comanda as any)?.refacut === true) && (typeof (comanda as any)?.motiv_refacut === 'string' && (comanda as any)?.motiv_refacut.trim() !== '') ? 'border-red-500' : 'border-border'} rounded-lg p-4 relative`}>
-                            {!comanda.logprolegatorie && (
+                            {!comanda.logprolegatorie && zonaActiva !== 'productie' && zonaActiva !== 'gravare' && (
                               <div className="pointer-events-none sticky top-1/2 z-10 -translate-y-1/2 transform">
                                 <div className="w-full flex items-center justify-center">
                                   <button
@@ -1141,6 +1290,17 @@ export const Content = ({
                                     <div>
                                       <img style={{ width: '100%' }} src={productImg} alt="" className="rounded-xl" />
                                     </div>
+                                  </div>
+
+                                  <div className="flex justify-end mb-3">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setExpandedProdPanel({ orderId: comanda.ID, productIndex: idx })}
+                                    >
+                                      Vezi anexe produs
+                                    </Button>
                                   </div>
 
                                   {/* Retetar (ascuns) pentru a păstra structura din design */}
@@ -1203,7 +1363,7 @@ export const Content = ({
       </main>
 
       {/* Bottom-fixed compact bar: search + dates (desktop and up) */}
-      <div className="hidden md:block fixed bottom-0 right-0 md:left-32 z-40 bg-white border-t border-border">
+      <div className="hidden md:block fixed bottom-0 right-0 md:left-32 z-40 bg-background border-t border-border">
         <div className="px-3 py-2 flex items-center gap-3">
           <div>
             <Button
@@ -1224,7 +1384,7 @@ export const Content = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Caută nume sau ID..."
-              className="h-8 px-2 py-1 border rounded-md w-full text-sm bg-white text-foreground border-input placeholder:text-muted-foreground"
+              className="h-8 px-2 py-1 border rounded-md w-full text-sm bg-background text-foreground border-input placeholder:text-muted-foreground"
             />
           </div>
           <div className="flex-1 overflow-x-auto">
@@ -1236,7 +1396,7 @@ export const Content = ({
                   className={`px-2 py-1 text-xs rounded-md whitespace-nowrap transition-colors ${
                     selectedShippingData === date
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-white border border-border hover:bg-gray-50'
+                      : 'bg-background border border-border hover:bg-accent'
                   }`}
                 >
                   {date}
@@ -1665,6 +1825,117 @@ export const Content = ({
               variant="outline" 
               onClick={() => setShowInventoryModal(false)}
               disabled={isSavingStock}
+            >
+              Închide
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Move (Muta) progress modal */}
+      <Dialog open={showMoveModal} onOpenChange={(open) => {
+        // prevent closing while running
+        if (open === false && !(moveStep === 'muta-done' || moveStep === 'error')) return;
+        setShowMoveModal(open);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Procesez mutarea comenzii {moveForOrderId ? `#${moveForOrderId}` : ''}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+                      {(() => {
+                        let val = 0;
+                        switch (moveStep) {
+                          case 'factura-start': val = 10; break;
+                          case 'factura-done': val = 33; break;
+                          case 'bon-start': val = 45; break;
+                          case 'bon-done': val = 66; break;
+                          case 'muta-start': val = 85; break;
+                          case 'muta-done': val = 100; break;
+                          default: val = 0;
+                        }
+                        return (
+                          <div className="mb-3">
+                            <div className="text-xs text-muted-foreground text-center mb-1">
+                              {moveStep === 'muta-done' ? 'Gata!' : 'Se procesează…'}
+                            </div>
+                            <div className="max-w-xs mx-auto">
+                              <Progress value={val} className="h-2" />
+                            </div>
+                          </div>
+                        );
+                      })()}
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5">
+                {moveStep === 'factura-start' ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                ) : moveStep === 'factura-done' || moveStep === 'bon-start' || moveStep === 'bon-done' || moveStep === 'muta-start' || moveStep === 'muta-done' ? (
+                  <Check className="w-4 h-4 text-green-600" />
+                ) : (
+                  <div className="w-4 h-4"></div>
+                )}
+              </div>
+              <div>
+                {moveStep === 'factura-done' || moveStep === 'bon-start' || moveStep === 'bon-done' || moveStep === 'muta-start' || moveStep === 'muta-done' ? (
+                  <div>
+                    Factura generată: <span className="font-semibold">{moveInfo.serie || 'PG'} {moveInfo.numar ?? 203}</span>
+                  </div>
+                ) : (
+                  <div>Se generează factura...</div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5">
+                {moveStep === 'bon-start' ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                ) : moveStep === 'bon-done' || moveStep === 'muta-start' || moveStep === 'muta-done' ? (
+                  <Check className="w-4 h-4 text-green-600" />
+                ) : (
+                  <div className="w-4 h-4"></div>
+                )}
+              </div>
+              <div>
+                {moveStep === 'bon-done' || moveStep === 'muta-start' || moveStep === 'muta-done' ? (
+                  <div>Bon emis (<span className="font-semibold">{moveInfo.bonId || 'BON-PG-203'}</span>) și trimis la printat</div>
+                ) : moveStep === 'bon-start' ? (
+                  <div>Se generează bon factura...</div>
+                ) : (
+                  <div>Se pregătește generarea bonului...</div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5">
+                {moveStep === 'muta-start' ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                ) : moveStep === 'muta-done' ? (
+                  <Check className="w-4 h-4 text-green-600" />
+                ) : (
+                  <div className="w-4 h-4"></div>
+                )}
+              </div>
+              <div>
+                {moveStep === 'muta-done' ? (
+                  <div>Comanda a fost mutată cu succes.</div>
+                ) : moveStep === 'muta-start' ? (
+                  <div>Se finalizează mutarea comenzii...</div>
+                ) : (
+                  <div>Se va trimite mutarea după generarea documentelor...</div>
+                )}
+              </div>
+            </div>
+
+            {moveStep === 'error' && (
+              <div className="text-red-600 text-sm">Eroare: {moveInfo.error}</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowMoveModal(false)}
+              disabled={!(moveStep === 'muta-done' || moveStep === 'error')}
             >
               Închide
             </Button>

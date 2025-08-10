@@ -74,7 +74,7 @@ export const Sidebar = ({ comenzi, selectedProductId, setSelectedProductId }: Si
               </Button>
               <div className="h-6 w-px bg-border" />
               <Button variant="ghost" size="sm" className="h-6 px-2 rounded-none text-xs">
-                {totalCount}
+                {totalCount} buc
               </Button>
             </div>
           </div>
