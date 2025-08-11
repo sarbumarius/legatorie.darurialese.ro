@@ -1328,16 +1328,16 @@ export const Content = ({
                                     </div>
                                   </div>
 
-                                  <div className="flex justify-end mb-3">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => setExpandedProdPanel({ orderId: comanda.ID, productIndex: idx })}
-                                    >
-                                      Vezi anexe produs
-                                    </Button>
-                                  </div>
+                                  {/*<div className="flex justify-end mb-3">*/}
+                                  {/*  <Button*/}
+                                  {/*    type="button"*/}
+                                  {/*    variant="outline"*/}
+                                  {/*    size="sm"*/}
+                                  {/*    onClick={() => setExpandedProdPanel({ orderId: comanda.ID, productIndex: idx })}*/}
+                                  {/*  >*/}
+                                  {/*    Vezi anexe produs*/}
+                                  {/*  </Button>*/}
+                                  {/*</div>*/}
 
                                   {/* Retetar (ascuns) pentru a păstra structura din design */}
                                   <div className="retetar hidden">
@@ -1512,16 +1512,16 @@ export const Content = ({
         </div>
       )}
       {/* Floating toggle button (hidden when chat is open) */}
-      {!showChat && (
-        <Button
-          className="fixed bottom-4 right-4 z-50 rounded-full h-12 w-12 p-0 shadow-lg bg-primary text-primary-foreground hover:opacity-90"
-          onClick={() => setShowChat(true)}
-          aria-label="Deschide chat Grafica"
-          title="Chat Grafica"
-        >
-          <MessageSquare className="w-6 h-6" />
-        </Button>
-      )}
+      {/*{!showChat && (*/}
+      {/*  <Button*/}
+      {/*    className="fixed bottom-4 right-4 z-50 rounded-full h-12 w-12 p-0 shadow-lg bg-primary text-primary-foreground hover:opacity-90"*/}
+      {/*    onClick={() => setShowChat(true)}*/}
+      {/*    aria-label="Deschide chat Grafica"*/}
+      {/*    title="Chat Grafica"*/}
+      {/*  >*/}
+      {/*    <MessageSquare className="w-6 h-6" />*/}
+      {/*  </Button>*/}
+      {/*)}*/}
 
       {/* Problem reporting modal */}
       <Dialog open={showProblemModal} onOpenChange={setShowProblemModal}>
