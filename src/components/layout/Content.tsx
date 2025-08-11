@@ -480,7 +480,7 @@ export const Content = ({
   const [moveForOrderId, setMoveForOrderId] = useState<number | null>(null);
   type MoveStep = 'idle' | 'factura-start' | 'factura-done' | 'bon-start' | 'bon-done' | 'muta-start' | 'muta-done' | 'error';
   const [moveStep, setMoveStep] = useState<MoveStep>('idle');
-  const [moveInfo, setMoveInfo] = useState<{ serie?: string; numar?: number; facturaError?: string; bonId?: string; bonError?: string; error?: string }>({});
+  const [moveInfo, setMoveInfo] = useState<{ serie?: string; numar?: number; factura?: string; link_factura?: string; link_plata?: string; id_factura?: number | string | null; success?: boolean; message_api?: string; facturaError?: string; bonId?: string; bonError?: string; error?: string }>({});
 
   // Function to handle "Muta" button click
   const handleMutaClick = async (comandaId: number) => {
@@ -498,8 +498,12 @@ export const Content = ({
         }
         const invData: any = invRes?.invoice_data || {};
         setMoveInfo({
-          serie: invData?.serie ?? invData?.series ?? '—',
-          numar: invData?.numar ?? invData?.number ?? undefined,
+          success: typeof invData?.success === 'boolean' ? invData.success : undefined,
+          message_api: invData?.message,
+          factura: invData?.factura,
+          link_factura: invData?.link_factura,
+          link_plata: invData?.link_plata,
+          id_factura: invData?.id_factura ?? null,
         });
       } catch (e: any) {
         // If order is refăcută, record the error but continue to next step
@@ -1912,7 +1916,24 @@ export const Content = ({
                     <div className="text-amber-600">Eroare la generarea facturii: <span className="font-semibold">{moveInfo.facturaError}</span>. Comandă refăcută — se continuă fără factură.</div>
                   ) : (
                     <div>
-                      Factura generată: <span className="font-semibold">{moveInfo.serie || 'PG'} {moveInfo.numar ?? 203}</span>
+                      {typeof moveInfo.success === 'boolean' && moveInfo.success === false ? (
+                        <div className="text-amber-600">Factura nu a fost generată: <span className="font-semibold">{moveInfo.message_api || 'Eroare necunoscută'}</span></div>
+                      ) : (
+                        <div className="flex flex-col">
+                          <div>
+                            Factura generată: <span className="font-semibold">{moveInfo.factura || `${moveInfo.serie || ''} ${moveInfo.numar || ''}`.trim()}</span>
+                            {moveInfo.id_factura ? <span className="text-muted-foreground"> (ID: {String(moveInfo.id_factura)})</span> : null}
+                          </div>
+                          <div className="text-xs">
+                            {moveInfo.link_factura && (
+                              <a href={moveInfo.link_factura} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline mr-3">Descarcă factura</a>
+                            )}
+                            {moveInfo.link_plata && (
+                              <a href={moveInfo.link_plata} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Link plată</a>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 ) : (
