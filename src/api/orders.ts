@@ -40,7 +40,7 @@ export async function generateFactura(id: number): Promise<any> {
 // POST /api/generare-bon/{id}
 export async function generateBon(id: number): Promise<any> {
     const token = localStorage.getItem("authToken");
-    const url = `${API_BASE}/api/generare-bon/${id}`;
+    const url = `${API_BASE}/api/boncomanda/${id}`;
     const response = await fetch(url, {
         method: 'POST',
         headers: {
